@@ -1,0 +1,11 @@
+# vim
+.*.sw[m-s]
+.sw[m-s]
+
+# zig
+zig-out
+zig-cache
+
+# clangd
+compile_commands.json
+.cache
