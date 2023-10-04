@@ -8,17 +8,6 @@
       "type": "number",
       "description": "The value for an id property of one of the nodes at which the dialogue begins"
     },
-    "publisher": {
-      "type": "object",
-      "properties": {
-        "username": {
-          "type": "string"
-        },
-        "email": {
-          "type": "string"
-        }
-      }
-    },
     "nodes": {
       "description": "The list of nodes in the dialogue, each representing an event during dialogue",
       "type": "array",
@@ -33,23 +22,115 @@
             "description": "Unique numeric id for this node"
           },
           "line": {
-            "type": "object"
+            "type": "object",
             "description": "The payload for a dialogue event of type 'line', where a speaker says some text",
+            "required": ["data"],
             "properties": {
               "data": {
                 "description": "properties of the spoken line",
                 "type": "object",
                 "required": ["speaker", "text"],
                 "properties": {
-                  "speaker": {
-                    "type": "string",
-                  },
-                  "text": {
-                    "type": "string",
-                  }
+                  "speaker": { "type": "string" },
+                  "text": { "type": "string" }
                 },
                 "additionalProperties": false
               },
+              "next": {
+                "type": "number",
+                "description": "id of the node following this one",
+                "minimum": 0
+              }
+            },
+            "additionalProperties": false
+          },
+          "random_switch": {
+            "type": "object",
+            "description": "The payload for a dialogue event of type 'random_switch', where a speaker says some text",
+            "required": ["chances", "nexts"],
+            "properties": {
+              "chances": {
+                "description": "list of chance counts per option, in order",
+                "type": "array",
+                "items": { "type": "number", "minimum": 0 }
+              },
+              "nexts": {
+                "description": "list of next nodes per option, in order",
+                "type": "array",
+                "items": { "type": "number", "minimum": 0 }
+              }
+            },
+            "additionalProperties": false
+          },
+          "reply": {
+            "type": "object",
+            "description": "The payload for a dialogue event of type 'reply', where a player is given a set of options with different continuations",
+            "required": ["texts", "nexts"],
+            "properties": {
+              "texts": {
+                "description": "list of reply text per option, in order",
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "nexts": {
+                "description": "list of next nodes per option, in order",
+                "type": "array",
+                "items": { "type": "number", "minimum": 0 }
+              }
+            },
+            "additionalProperties": false
+          },
+          "lock": {
+            "type": "object",
+            "description": "The payload for a dialogue event of type 'lock', which sets a true/false variable to false",
+            "required": ["booleanVariableIndex"],
+            "properties": {
+              "booleanVariableIndex": {
+                "type": "number",
+                "description": "list of reply text per option, in order",
+                "minimum": 0
+              },
+              "next": {
+                "type": "number",
+                "description": "id of the node following this one",
+                "minimum": 0
+              }
+            },
+            "additionalProperties": false
+          },
+          "unlock": {
+            "type": "object",
+            "description": "The payload for a dialogue event of type 'unlock', which sets a true/false variable to true",
+            "required": ["booleanVariableIndex"],
+            "properties": {
+              "booleanVariableIndex": {
+                "type": "number",
+                "description": "list of reply text per option, in order",
+                "minimum": 0
+              },
+              "next": {
+                "type": "number",
+                "description": "id of the node following this one",
+                "minimum": 0
+              }
+            },
+            "additionalProperties": false
+          },
+          "call": {
+            "type": "object",
+            "description": "The payload for a dialogue event of type 'call', which calls the registered callback from the environment",
+            "required": ["functionIndex"],
+            "properties": {
+              "functionIndex": {
+                "type": "number",
+                "description": "list of reply text per option, in order",
+                "minimum": 0
+              },
+              "next": {
+                "type": "number",
+                "description": "id of the node following this one",
+                "minimum": 0
+              }
             },
             "additionalProperties": false
           }
