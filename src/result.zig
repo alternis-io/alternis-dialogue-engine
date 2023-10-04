@@ -68,6 +68,7 @@ pub fn Result(comptime R: type) type {
         return extern struct {
             /// not initialized if err is not 0/null
             value: R = undefined,
+            /// must be null terminated!
             err: ?[*:0]const u8 = null,
             // TODO: try to compress to u16 if possible
             /// 0 if value is valid
@@ -124,7 +125,7 @@ pub fn Result(comptime R: type) type {
         return struct {
             /// not initialized if err is not 0/null
             value: R,
-            err: ?[*:0]const u8,
+            err: ?[:0]const u8 = null,
             // TODO: try to compress to u16 if possible
             /// 0 if value is valid
             errCode: usize,
@@ -152,7 +153,7 @@ pub fn Result(comptime R: type) type {
             /// FIXME: this is designed to be free'd from C libraries, and the current implementation
             /// doesn't support that for string literals
             /// you can't pass a string literal to it
-            pub fn err(e: [*:0]const u8) Self {
+            pub fn err(e: [:0]const u8) Self {
                 return Self{
                     .value = undefined,
                     .err = e,
@@ -172,7 +173,8 @@ pub fn Result(comptime R: type) type {
             pub fn fmt_err(alloc: std.mem.Allocator, comptime fmt_str: []const u8, fmt_args: anytype) Self {
                 return Self{
                     .value = undefined,
-                    .err = std.fmt.allocPrintZ(alloc, "Error: " ++ fmt_str, fmt_args) catch |sub_err| std.debug.panic("error '{}' while explaining an error", .{sub_err}),
+                    .err = std.fmt.allocPrintZ(alloc, "Error: " ++ fmt_str, fmt_args)
+                        catch |sub_err| std.debug.panic("error '{}' while explaining an error", .{sub_err}),
                     .errCode = fmtStringId(fmt_str),
                 };
             }

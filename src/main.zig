@@ -6,39 +6,43 @@ const Result = @import("./result.zig").Result;
 const Index = usize;
 
 const Next = packed struct {
-  valid: u1 = false,
+  valid: bool = false,
   value: u31 = undefined,
 };
 
-const Node = packed union {
-  line: packed struct {
+test "Next is u32" {
+  try t.expectEqual(@bitSizeOf(Next), 32);
+}
+
+const Node = union (enum) {
+  line: struct {
     text: []const u8 = "",
     // TODO: should this be optional?
     metadata: []const u8 = "",
     next: Next,
   },
-  randomSwitch: packed struct {
+  randomSwitch: struct {
     nexts: []const Next, // does it make sense for these to be optional?
     chances: []const u32,
   },
-  reply: packed struct {
+  reply: struct {
     nexts: []const Next, // does it make sense for these to be optional?
     /// utf8 assumed
     texts: []const u8,
   },
-  lock: packed struct {
+  lock: struct {
     booleanVariableIndex: Index,
     next: Next,
   },
-  unlock: packed struct {
+  unlock: struct {
     booleanVariableIndex: Index,
     next: Next,
   },
-  call: packed struct {
+  call: struct {
     functionIndex: Index,
     next: Next,
   },
-  goto: packed struct {
+  goto: struct {
     next: Next,
   },
 
@@ -57,7 +61,7 @@ const Node = packed union {
 };
 
 /// A function implemented by the environment
-const Callback = fn() void;
+const Callback = *fn() void;
 
 /// The possible types for a variable
 const VariableType = enum {
@@ -68,7 +72,6 @@ const VariableType = enum {
 };
 
 pub const DialogueContext = struct {
-  entryNodeIndex: usize,
   nodes: std.MultiArrayList(Node),
   callbacks: []const Callback,
   variables: struct {
@@ -81,6 +84,8 @@ pub const DialogueContext = struct {
   currentNode: usize,
 
   pub fn initFromJson(json_text: []const u8, alloc: std.mem.Allocator) Result(DialogueContext) {
+    var r = Result(DialogueContext).err("not initialized");
+
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena.deinit();
     // allocator for temporary allocations, for permanent ones, use the 'alloc' parameter
@@ -91,16 +96,34 @@ pub const DialogueContext = struct {
     json_reader.enableDiagnostics(&json_diagnostics);
 
     const dialogue_data = json.parseFromTokenSourceLeaky(DialogueJsonFormat, arena_alloc, &json_reader, .{
-        .ignore_unknown_fields = true,
-    }) catch |e| return Result(DialogueContext).fmt_err(alloc, "{}: {}", .{e, json_diagnostics});
+      .ignore_unknown_fields = true,
+    }) catch |e| { r = Result(DialogueContext).fmt_err(alloc, "{}: {}", .{e, json_diagnostics}); return r; };
 
     var nodes = std.MultiArrayList(Node){};
-    nodes.ensureTotalCapacity(dialogue_data.nodes.len);
+    defer if (r.is_err()) nodes.deinit(alloc);
+    nodes.ensureTotalCapacity(alloc, dialogue_data.nodes.len)
+      catch |e| { r = Result(DialogueContext).fmt_err(alloc, "{}", .{e}); return r; };
 
-    return .{
+    r = Result(DialogueContext).ok(.{
+      // FIXME:
       .nodes = nodes,
       .callbacks = &.{},
-    };
+      .variables = .{
+        .strings = &.{},
+        .booleans = &.{},
+      },
+      .currentNode = 0,
+    });
+
+    return r;
+  }
+
+  pub fn deinit(self: *@This(), alloc: std.mem.Allocator) void {
+    self.nodes.deinit(alloc);
+    // FIXME:
+    // alloc.free(self.callbacks);
+    // alloc.free(self.variables.strings);
+    // alloc.free(self.variables.booleans);
   }
 };
 
@@ -116,7 +139,7 @@ const DialogueJsonFormat = struct {
 
 test "create and run context to completion" {
   // FIXME: load from tests/dir
-  const ctx_result = DialogueContext.initFromJson(
+  var ctx_result = DialogueContext.initFromJson(
     \\{
     \\  "nodes": [
     \\    {"type": "entry", "id": 0},
@@ -124,9 +147,15 @@ test "create and run context to completion" {
     \\  ],
     \\  "edges": [
     \\    [0, 1]
-    \\  ],
+    \\  ]
     \\}
+    , t.allocator
   );
+  defer if (ctx_result.is_ok()) ctx_result.value.deinit(t.allocator)
+    // FIXME: need custom freeing logic
+    else t.allocator.free(@constCast(ctx_result.err.?));
 
-  t.expect(ctx_result.is_ok());
+  if (ctx_result.is_err())
+    std.debug.print("err: '{s}'", .{ctx_result.err.?});
+  try t.expect(ctx_result.is_ok());
 }
