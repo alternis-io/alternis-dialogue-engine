@@ -57,47 +57,6 @@ const Node = union (enum) {
   goto: struct {
     next: Next,
   },
-
-  // custom json parsing would better handle outer-object tagged JSON object unions
-  pub fn jsonParse(allocator: std.mem.Allocator, source: anytype, options: json.ParseOptions) !@This() {
-    return switch (try source.next()) {
-      .object_begin  => {
-        // FIXME: are these slices moved or borrowed?
-        const object = try json.innerParse(struct {
-          type: []const u8,
-          data: ?DialogueEntry = null,
-          next: ?Next = null,
-          nexts: ?[]const Next = null,
-          chances: ?[]const u32 = null,
-          texts: ?[]const u8 = null,
-          booleanVariableIndex: ?Index = null,
-          functionIndex: ?Index = null,
-        }, allocator, source, options);
-
-        if (object.data) |data| {
-          return .{.line = .{.data = data, .next = Next.fromOptionalInt(object.next) }};
-        } else if (object.chances) |chances| {
-          return if (object.nexts) |nexts|
-              .{.randomSwitch = .{.chances = chances, .nexts = nexts }}
-            else error.MissingField;
-        } else if (object.texts) |texts| {
-          return if (object.nexts) |nexts|
-              .{.reply = .{.texts = texts, .nexts = nexts }}
-            else error.MissingField;
-        } else if (object.booleanVariableIndex) |booleanVariableIndex| {
-          return .{.lock = .{.data = data, .next = Next.fromOptionalInt(object.next) }};
-        } else if (object.functionVariableIndex) |functionVariableIndex| {
-          return .{.call = .{.data = data, .next = Next.fromOptionalInt(object.next) }};
-        } else if (object.next) |next| {
-          return .{.goto = .{.next = Next.fromOptionalInt(next)}};
-        }
-
-        // FIXME: add to diagnostics
-        return error.MissingField;
-      },
-      else => error.UnexpectedToken,
-    };
-  }
 };
 
 /// A function implemented by the environment
@@ -158,8 +117,14 @@ pub const DialogueContext = struct {
       catch |e| { r = Result(DialogueContext).fmt_err(alloc, "{}", .{e}); return r; };
 
     for (dialogue_data.nodes) |json_node| {
-      nodes.append(alloc, json_node)
-        catch |e| { r = Result(DialogueContext).fmt_err(alloc, "{}", .{e}); return r; };
+      const maybe_node = json_node.toNode();
+      if (maybe_node) |node| {
+        nodes.append(alloc, node)
+          catch |e| { r = Result(DialogueContext).fmt_err(alloc, "{}", .{e}); return r; };
+      } else {
+        r = Result(DialogueContext).fmt_err(alloc, "{s}", .{"invalid node without type or data"});
+        return r;
+      }
     }
 
     var booleans = std.DynamicBitSet.initEmpty(alloc, 0)
@@ -219,10 +184,32 @@ pub const DialogueContext = struct {
 // FIXME: I think it would be more efficient to replace this with a custom json parsing routine
 const DialogueJsonFormat = struct {
   nodes: []const struct {
-    type: []const u8,
     id: u64,
-    data: ?Node,
+
+    // FIXME: these must be in sync with the implementation of Node!
+    // TODO: generate these from Node...
+    // perhaps a comptime function that takes a union and turns it into this kind of struct with an
+    // appropriate `jsonParse` function is the way to do it
+    line: ?@typeInfo(Node).Union.fields[0].type = null,
+    randomSwitch: ?@typeInfo(Node).Union.fields[1].type = null,
+    reply: ?@typeInfo(Node).Union.fields[2].type = null,
+    lock: ?@typeInfo(Node).Union.fields[3].type = null,
+    unlock: ?@typeInfo(Node).Union.fields[4].type = null,
+    call: ?@typeInfo(Node).Union.fields[5].type = null,
+    goto: ?@typeInfo(Node).Union.fields[6].type = null,
+
+    fn toNode(self: @This()) ?Node {
+      if (self.line) |v| return .{.line = v};
+      if (self.randomSwitch) |v| return .{.randomSwitch = v};
+      if (self.reply) |v| return .{.reply = v};
+      if (self.lock) |v| return .{.lock = v};
+      if (self.unlock) |v| return .{.unlock = v};
+      if (self.call) |v| return .{.call = v};
+      if (self.goto) |v| return .{.goto = v};
+      return null;
+    }
   },
+
   edges: []const []const u64,
 };
 
