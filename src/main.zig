@@ -16,6 +16,13 @@ const Next = packed struct {
       .value = @intCast(int.?),
     };
   }
+
+  pub fn jsonParse(allocator: std.mem.Allocator, source: anytype, options: json.ParseOptions) !@This() {
+    if (try source.peekNextTokenType() == .null)
+      return .{};
+    const value = try json.innerParse(u31, allocator, source, options);
+    return .{ .value = value, .valid = true };
+  }
 };
 
 test "Next is u32" {
@@ -31,9 +38,9 @@ const DialogueEntry = struct {
 const Node = union (enum) {
   line: struct {
     data: DialogueEntry,
-    next: Next,
+    next: Next = .{},
   },
-  randomSwitch: struct {
+  random_switch: struct {
     nexts: []const Next, // does it make sense for these to be optional?
     chances: []const u32,
   },
@@ -44,18 +51,18 @@ const Node = union (enum) {
   },
   lock: struct {
     booleanVariableIndex: Index,
-    next: Next,
+    next: Next = .{},
   },
   unlock: struct {
     booleanVariableIndex: Index,
-    next: Next,
+    next: Next = .{},
   },
   call: struct {
     functionIndex: Index,
-    next: Next,
+    next: Next = .{},
   },
   goto: struct {
-    next: Next,
+    next: Next = .{},
   },
 };
 
@@ -169,7 +176,7 @@ pub const DialogueContext = struct {
           self.currentNodeIndex = n.next.value;
           return .{ .line = n.data };
         },
-        .randomSwitch => {},
+        .random_switch => {},
         .reply => {},
         .lock => {},
         .unlock => {},
@@ -183,24 +190,23 @@ pub const DialogueContext = struct {
 
 // FIXME: I think it would be more efficient to replace this with a custom json parsing routine
 const DialogueJsonFormat = struct {
+  entryId: u64,
   nodes: []const struct {
     id: u64,
 
     // FIXME: these must be in sync with the implementation of Node!
-    // TODO: generate these from Node...
-    // perhaps a comptime function that takes a union and turns it into this kind of struct with an
-    // appropriate `jsonParse` function is the way to do it
+    // TODO: generate these from Node type...
     line: ?@typeInfo(Node).Union.fields[0].type = null,
-    randomSwitch: ?@typeInfo(Node).Union.fields[1].type = null,
+    random_switch: ?@typeInfo(Node).Union.fields[1].type = null,
     reply: ?@typeInfo(Node).Union.fields[2].type = null,
     lock: ?@typeInfo(Node).Union.fields[3].type = null,
     unlock: ?@typeInfo(Node).Union.fields[4].type = null,
     call: ?@typeInfo(Node).Union.fields[5].type = null,
     goto: ?@typeInfo(Node).Union.fields[6].type = null,
 
-    fn toNode(self: @This()) ?Node {
+    pub fn toNode(self: @This()) ?Node {
       if (self.line) |v| return .{.line = v};
-      if (self.randomSwitch) |v| return .{.randomSwitch = v};
+      if (self.random_switch) |v| return .{.random_switch = v};
       if (self.reply) |v| return .{.reply = v};
       if (self.lock) |v| return .{.lock = v};
       if (self.unlock) |v| return .{.unlock = v};
@@ -209,33 +215,43 @@ const DialogueJsonFormat = struct {
       return null;
     }
   },
-
-  edges: []const []const u64,
 };
 
 test "create and run context to completion" {
   // FIXME: load a larger one from tests dir
   var ctx_result = DialogueContext.initFromJson(
     \\{
+    \\  "entryId": 0,
     \\  "nodes": [
-    \\    {"type": "entry", "id": 0},
-    \\    {"type": "line", "id": 1, "data": { "line": {
-    \\      "speaker": "hello",
-    \\      "text": "hello world!"
-    \\    }}}
-    \\  ],
-    \\  "edges": [
-    \\    [0, 1]
+    \\    {
+    \\      "id": 0,
+    \\      "line": {
+    \\        "data": {
+    \\          "speaker": "test",
+    \\          "text": "hello world!"
+    \\        },
+    \\        "next": 1
+    \\      }
+    \\    },
+    \\    {
+    \\      "id": 1,
+    \\      "line": {
+    \\        "data": {
+    \\          "speaker": "test",
+    \\          "text": "goodbye cruel world!"
+    \\        }
+    \\      }
+    \\    }
     \\  ]
     \\}
     , t.allocator
   );
-  defer if (ctx_result.is_ok()) ctx_result.value.deinit(t.allocator);
+  defer if (ctx_result.is_ok()) ctx_result.value.deinit(t.allocator)
     // FIXME: need to add freeing logic to Result
-    //else t.allocator.free(@constCast(ctx_result.err.?));
+    else t.allocator.free(@constCast(ctx_result.err.?));
 
   if (ctx_result.is_err())
-    std.debug.print("err: '{s}'", .{ctx_result.err.?});
+    std.debug.print("\nerr: '{s}'", .{ctx_result.err.?});
   try t.expect(ctx_result.is_ok());
 
   var ctx = ctx_result.value;
@@ -246,7 +262,10 @@ test "create and run context to completion" {
       .text = "hello world!",
     },
   };
-  _ = ctx.step();
-  try t.expectEqual(expected, ctx.step());
+  const step_result_1 = ctx.step();
+  // FIXME: do expectEqual
+  try t.expect(step_result_1 == .line);
+  try t.expectEqualStrings(expected.line.speaker, step_result_1.line.speaker);
+  try t.expectEqualStrings(expected.line.text, step_result_1.line.text);
   try t.expectEqual(@as(usize, 1), ctx.currentNodeIndex);
 }
