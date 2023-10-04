@@ -9,7 +9,7 @@ fn fmtStringId(
     return @intFromPtr(fmt_str.ptr);
 }
 
-fn ResultDecls(comptime R: type, comptime Self: type) type {
+fn ResultDecls(comptime R: type, comptime E: type, comptime Self: type) type {
     return struct {
         pub fn is_ok(self: Self) bool {
             return self.err == null;
@@ -27,7 +27,7 @@ fn ResultDecls(comptime R: type, comptime Self: type) type {
             };
         }
 
-        pub fn err(e: [*:0]const u8) Self {
+        pub fn err(e: E) Self {
             return Self{
                 .value = undefined,
                 .err = e,
@@ -131,59 +131,59 @@ pub fn Result(comptime R: type) type {
             errCode: usize,
 
             const Self = @This();
-            // FIXME:
-            //pub usingnamespace ResultDecls(R, @This());
 
-            pub fn is_ok(self: Self) bool {
-                return self.err == null;
-            }
+            pub usingnamespace ResultDecls(R, @typeInfo(@This()).Struct.fields[1].type, @This());
 
-            pub fn is_err(self: Self) bool {
-                return !self.is_ok();
-            }
+            // pub fn is_ok(self: Self) bool {
+            //     return self.err == null;
+            // }
 
-            pub fn ok(r: R) Self {
-                return Self{
-                    .value = r,
-                    .err = null,
-                    .errCode = 0,
-                };
-            }
+            // pub fn is_err(self: Self) bool {
+            //     return !self.is_ok();
+            // }
 
-            /// FIXME: this is designed to be free'd from C libraries, and the current implementation
-            /// doesn't support that for string literals
-            /// you can't pass a string literal to it
-            pub fn err(e: [:0]const u8) Self {
-                return Self{
-                    .value = undefined,
-                    .err = e,
-                    .errCode = 1, // TODO: determine from e
-                };
-            }
+            // pub fn ok(r: R) Self {
+            //     return Self{
+            //         .value = r,
+            //         .err = null,
+            //         .errCode = 0,
+            //     };
+            // }
 
-            pub fn err_as(self: @This(), comptime T: type) Result(T) {
-                std.debug.assert(self.is_err());
-                return Result(T) {
-                    .value = undefined,
-                    .err = self.err,
-                    .errCode = self.errCode,
-                };
-            }
+            // /// FIXME: this is designed to be free'd from C libraries, and the current implementation
+            // /// doesn't support that for string literals
+            // /// you can't pass a string literal to it
+            // pub fn err(e: [:0]const u8) Self {
+            //     return Self{
+            //         .value = undefined,
+            //         .err = e,
+            //         .errCode = 1, // TODO: determine from e
+            //     };
+            // }
 
-            pub fn fmt_err(alloc: std.mem.Allocator, comptime fmt_str: []const u8, fmt_args: anytype) Self {
-                return Self{
-                    .value = undefined,
-                    .err = std.fmt.allocPrintZ(alloc, "Error: " ++ fmt_str, fmt_args)
-                        catch |sub_err| std.debug.panic("error '{}' while explaining an error", .{sub_err}),
-                    .errCode = fmtStringId(fmt_str),
-                };
-            }
+            // pub fn err_as(self: @This(), comptime T: type) Result(T) {
+            //     std.debug.assert(self.is_err());
+            //     return Result(T) {
+            //         .value = undefined,
+            //         .err = self.err,
+            //         .errCode = self.errCode,
+            //     };
+            // }
 
-            pub fn c_fmt_err(comptime fmt_str: []const u8, fmt_args: anytype) Self {
-                return if (builtin.link_libc)
-                    Result(@TypeOf(R.value)).fmt_err(std.heap.raw_c_allocator, fmt_str, fmt_args)
-                else @compileError("Must compile with libc");
-            }
+            // pub fn fmt_err(alloc: std.mem.Allocator, comptime fmt_str: []const u8, fmt_args: anytype) Self {
+            //     return Self{
+            //         .value = undefined,
+            //         .err = std.fmt.allocPrintZ(alloc, "Error: " ++ fmt_str, fmt_args)
+            //             catch |sub_err| std.debug.panic("error '{}' while explaining an error", .{sub_err}),
+            //         .errCode = fmtStringId(fmt_str),
+            //     };
+            // }
+
+            // pub fn c_fmt_err(comptime fmt_str: []const u8, fmt_args: anytype) Self {
+            //     return if (builtin.link_libc)
+            //         Result(@TypeOf(R.value)).fmt_err(std.heap.raw_c_allocator, fmt_str, fmt_args)
+            //     else @compileError("Must compile with libc");
+            // }
         };
     }
 }

@@ -14,6 +14,11 @@ test "Next is u32" {
   try t.expectEqual(@bitSizeOf(Next), 32);
 }
 
+const DialogueEntry = struct {
+  speaker: []const u8,
+  text: []const u8,
+};
+
 const Node = union (enum) {
   line: struct {
     text: []const u8 = "",
@@ -125,9 +130,23 @@ pub const DialogueContext = struct {
     // alloc.free(self.variables.strings);
     // alloc.free(self.variables.booleans);
   }
+
+  pub fn step() void {
+
+  }
 };
 
-// FIXME: I think it would be better to replace this with a custom
+pub const DialogueOption = struct {
+  speaker: []const u8,
+  text: []const u8,
+};
+
+pub const DialogueStepResult = union (enum) {
+  none,
+  options: []DialogueOption,
+};
+
+// FIXME: I think it would be more efficient to replace this with a custom
 // json parsing routine
 const DialogueJsonFormat = struct {
   nodes: []const struct {
@@ -152,7 +171,7 @@ test "create and run context to completion" {
     , t.allocator
   );
   defer if (ctx_result.is_ok()) ctx_result.value.deinit(t.allocator)
-    // FIXME: need custom freeing logic
+    // FIXME: need to add freeing logic to Result
     else t.allocator.free(@constCast(ctx_result.err.?));
 
   if (ctx_result.is_err())
