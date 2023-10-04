@@ -8,6 +8,14 @@ const Index = usize;
 const Next = packed struct {
   valid: bool = false,
   value: u31 = undefined,
+
+  pub fn fromOptionalInt(int: anytype) Next {
+    @setRuntimeSafety(true);
+    return Next{
+      .valid = int != null,
+      .value = @intCast(int.?),
+    };
+  }
 };
 
 test "Next is u32" {
@@ -17,13 +25,12 @@ test "Next is u32" {
 const DialogueEntry = struct {
   speaker: []const u8,
   text: []const u8,
+  metadata: ?[]const u8 = null,
 };
 
 const Node = union (enum) {
   line: struct {
-    text: []const u8 = "",
-    // TODO: should this be optional?
-    metadata: []const u8 = "",
+    data: DialogueEntry,
     next: Next,
   },
   randomSwitch: struct {
@@ -51,17 +58,45 @@ const Node = union (enum) {
     next: Next,
   },
 
-  pub fn execute(self: @This(), ctx: *DialogueContext) void {
-    switch (self.data) {
-      .line => {},
-      .randomSwitch => {},
-      .reply => {},
-      .lock => {},
-      .unlock => {},
-      .call => {},
-      // does it make sense for self.next to be invalid?
-      .goto => { ctx.currentNode = self.next.value; },
-    }
+  // custom json parsing would better handle outer-object tagged JSON object unions
+  pub fn jsonParse(allocator: std.mem.Allocator, source: anytype, options: json.ParseOptions) !@This() {
+    return switch (try source.next()) {
+      .object_begin  => {
+        // FIXME: are these slices moved or borrowed?
+        const object = try json.innerParse(struct {
+          type: []const u8,
+          data: ?DialogueEntry = null,
+          next: ?Next = null,
+          nexts: ?[]const Next = null,
+          chances: ?[]const u32 = null,
+          texts: ?[]const u8 = null,
+          booleanVariableIndex: ?Index = null,
+          functionIndex: ?Index = null,
+        }, allocator, source, options);
+
+        if (object.data) |data| {
+          return .{.line = .{.data = data, .next = Next.fromOptionalInt(object.next) }};
+        } else if (object.chances) |chances| {
+          return if (object.nexts) |nexts|
+              .{.randomSwitch = .{.chances = chances, .nexts = nexts }}
+            else error.MissingField;
+        } else if (object.texts) |texts| {
+          return if (object.nexts) |nexts|
+              .{.reply = .{.texts = texts, .nexts = nexts }}
+            else error.MissingField;
+        } else if (object.booleanVariableIndex) |booleanVariableIndex| {
+          return .{.lock = .{.data = data, .next = Next.fromOptionalInt(object.next) }};
+        } else if (object.functionVariableIndex) |functionVariableIndex| {
+          return .{.call = .{.data = data, .next = Next.fromOptionalInt(object.next) }};
+        } else if (object.next) |next| {
+          return .{.goto = .{.next = Next.fromOptionalInt(next)}};
+        }
+
+        // FIXME: add to diagnostics
+        return error.MissingField;
+      },
+      else => error.UnexpectedToken,
+    };
   }
 };
 
@@ -81,12 +116,25 @@ pub const DialogueContext = struct {
   callbacks: []const Callback,
   variables: struct {
     /// has upper size bound of Index
-    strings: []u8,
+    strings: [][]const u8,
+    // FIXME: use a dynamic bitset
     /// has upper size bound of Index
-    booleans: []bool,
+    booleans: std.DynamicBitSet,
   },
 
-  currentNode: usize,
+  currentNodeIndex: usize,
+
+  pub const Option = struct {
+    speaker: []const u8,
+    text: []const u8,
+  };
+
+  // FIXME: the alignments are stupid large here
+  pub const StepResult = union (enum) {
+    none,
+    options: []Option,
+    line: DialogueEntry,
+  };
 
   pub fn initFromJson(json_text: []const u8, alloc: std.mem.Allocator) Result(DialogueContext) {
     var r = Result(DialogueContext).err("not initialized");
@@ -109,60 +157,85 @@ pub const DialogueContext = struct {
     nodes.ensureTotalCapacity(alloc, dialogue_data.nodes.len)
       catch |e| { r = Result(DialogueContext).fmt_err(alloc, "{}", .{e}); return r; };
 
+    for (dialogue_data.nodes) |json_node| {
+      nodes.append(alloc, json_node)
+        catch |e| { r = Result(DialogueContext).fmt_err(alloc, "{}", .{e}); return r; };
+    }
+
+    var booleans = std.DynamicBitSet.initEmpty(alloc, 0)
+      catch |e| { r = Result(DialogueContext).fmt_err(alloc, "{}", .{e}); return r; };
+
+    var strings = alloc.alloc([]const u8, 0)
+      catch |e| { r = Result(DialogueContext).fmt_err(alloc, "{}", .{e}); return r; };
+
+    var callbacks = alloc.alloc(Callback, 0)
+      catch |e| { r = Result(DialogueContext).fmt_err(alloc, "{}", .{e}); return r; };
+
     r = Result(DialogueContext).ok(.{
       // FIXME:
       .nodes = nodes,
-      .callbacks = &.{},
+      .callbacks = callbacks,
       .variables = .{
-        .strings = &.{},
-        .booleans = &.{},
+        .strings = strings,
+        .booleans = booleans,
       },
-      .currentNode = 0,
+      .currentNodeIndex = 0,
     });
 
     return r;
   }
 
+  fn currentNode(self: @This()) Node {
+    return self.nodes.get(self.currentNodeIndex);
+  }
+
   pub fn deinit(self: *@This(), alloc: std.mem.Allocator) void {
     self.nodes.deinit(alloc);
-    // FIXME:
-    // alloc.free(self.callbacks);
-    // alloc.free(self.variables.strings);
-    // alloc.free(self.variables.booleans);
+    alloc.free(self.callbacks);
+    alloc.free(self.variables.strings);
+    self.variables.booleans.deinit();
   }
 
-  pub fn step() void {
-
+  pub fn step(self: *@This()) StepResult {
+    while (true) {
+      switch (self.currentNode()) {
+        .line => |n| {
+          // FIXME: this technically makes it mean nextNodeIndex!
+          self.currentNodeIndex = n.next.value;
+          return .{ .line = n.data };
+        },
+        .randomSwitch => {},
+        .reply => {},
+        .lock => {},
+        .unlock => {},
+        .call => {},
+        // does it make sense for self.next to be invalid?
+        .goto => |n| { self.currentNodeIndex = n.next.value; },
+      }
+    }
   }
 };
 
-pub const DialogueOption = struct {
-  speaker: []const u8,
-  text: []const u8,
-};
-
-pub const DialogueStepResult = union (enum) {
-  none,
-  options: []DialogueOption,
-};
-
-// FIXME: I think it would be more efficient to replace this with a custom
-// json parsing routine
+// FIXME: I think it would be more efficient to replace this with a custom json parsing routine
 const DialogueJsonFormat = struct {
   nodes: []const struct {
     type: []const u8,
     id: u64,
+    data: ?Node,
   },
   edges: []const []const u64,
 };
 
 test "create and run context to completion" {
-  // FIXME: load from tests/dir
+  // FIXME: load a larger one from tests dir
   var ctx_result = DialogueContext.initFromJson(
     \\{
     \\  "nodes": [
     \\    {"type": "entry", "id": 0},
-    \\    {"type": "line", "id": 1}
+    \\    {"type": "line", "id": 1, "data": { "line": {
+    \\      "speaker": "hello",
+    \\      "text": "hello world!"
+    \\    }}}
     \\  ],
     \\  "edges": [
     \\    [0, 1]
@@ -170,11 +243,23 @@ test "create and run context to completion" {
     \\}
     , t.allocator
   );
-  defer if (ctx_result.is_ok()) ctx_result.value.deinit(t.allocator)
+  defer if (ctx_result.is_ok()) ctx_result.value.deinit(t.allocator);
     // FIXME: need to add freeing logic to Result
-    else t.allocator.free(@constCast(ctx_result.err.?));
+    //else t.allocator.free(@constCast(ctx_result.err.?));
 
   if (ctx_result.is_err())
     std.debug.print("err: '{s}'", .{ctx_result.err.?});
   try t.expect(ctx_result.is_ok());
+
+  var ctx = ctx_result.value;
+  // REPORTME: inlining expected causes comptiler alignment cast error
+  const expected = DialogueContext.StepResult{
+    .line = .{
+      .speaker = "test",
+      .text = "hello world!",
+    },
+  };
+  _ = ctx.step();
+  try t.expectEqual(expected, ctx.step());
+  try t.expectEqual(@as(usize, 1), ctx.currentNodeIndex);
 }

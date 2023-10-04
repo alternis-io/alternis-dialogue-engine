@@ -130,10 +130,10 @@ pub fn Result(comptime R: type) type {
             /// 0 if value is valid
             errCode: usize,
 
-            const Self = @This();
-
             pub usingnamespace ResultDecls(R, @typeInfo(@This()).Struct.fields[1].type, @This());
 
+            // FIXME: delete if the above worked
+            //
             // pub fn is_ok(self: Self) bool {
             //     return self.err == null;
             // }
