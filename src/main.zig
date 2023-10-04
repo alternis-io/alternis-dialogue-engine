@@ -5,6 +5,7 @@ const Result = @import("./result.zig").Result;
 
 const Index = usize;
 
+// NOTE: probably possible to make this a tagged union with a u1 tag, or just a ?u31...
 const Next = packed struct {
   valid: bool = false,
   value: u31 = undefined,
@@ -35,15 +36,25 @@ const DialogueEntry = struct {
   metadata: ?[]const u8 = null,
 };
 
+
+const RandomSwitch = struct {
+  nexts: []const Next, // does it make sense for these to be optional?
+  chances: []const u32,
+  total_chances: u64,
+
+  fn init(nexts: []const Next, chances: []const u32) @This() {
+    var total_chances: u64 = 0;
+    for (chances) |chance| total_chances += chance;
+    return .{ .nexts = nexts, .chances = chances, .total_chances = total_chances };
+  }
+};
+
 const Node = union (enum) {
   line: struct {
     data: DialogueEntry,
     next: Next = .{},
   },
-  random_switch: struct {
-    nexts: []const Next, // does it make sense for these to be optional?
-    chances: []const u32,
-  },
+  random_switch: RandomSwitch,
   reply: struct {
     nexts: []const Next, // does it make sense for these to be optional?
     /// utf8 assumed
@@ -79,7 +90,7 @@ const VariableType = enum {
 
 pub const DialogueContext = struct {
   nodes: std.MultiArrayList(Node),
-  callbacks: []const Callback,
+  functions: []const ?Callback,
   variables: struct {
     /// has upper size bound of Index
     strings: [][]const u8,
@@ -88,21 +99,30 @@ pub const DialogueContext = struct {
     booleans: std.DynamicBitSet,
   },
 
+  entryNodeIndex: usize,
   currentNodeIndex: usize,
 
-  pub const Option = struct {
-    speaker: []const u8,
-    text: []const u8,
-  };
+  rand: std.rand.DefaultPrng,
 
   // FIXME: the alignments are stupid large here
   pub const StepResult = union (enum) {
     none,
-    options: []Option,
+    options: struct {
+      texts: []const u8,
+    },
     line: DialogueEntry,
   };
 
-  pub fn initFromJson(json_text: []const u8, alloc: std.mem.Allocator) Result(DialogueContext) {
+  pub const InitOpts = struct {
+    // would it be more space-efficient to require u63? does it matter?
+    random_seed: ?u64 = null,
+  };
+
+  pub fn initFromJson(
+    json_text: []const u8,
+    alloc: std.mem.Allocator,
+    opts: InitOpts,
+  ) Result(DialogueContext) {
     var r = Result(DialogueContext).err("not initialized");
 
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
@@ -140,18 +160,28 @@ pub const DialogueContext = struct {
     var strings = alloc.alloc([]const u8, 0)
       catch |e| { r = Result(DialogueContext).fmt_err(alloc, "{}", .{e}); return r; };
 
-    var callbacks = alloc.alloc(Callback, 0)
+    var functions = alloc.alloc(Callback, 0)
       catch |e| { r = Result(DialogueContext).fmt_err(alloc, "{}", .{e}); return r; };
+
+    const seed = opts.random_seed orelse _: {
+      var time: std.os.system.timespec = undefined;
+      std.os.clock_gettime(std.os.CLOCK.REALTIME, &time)
+        catch |e| { r = Result(DialogueContext).fmt_err(alloc, "{}", .{e}); return r; };
+      const time_seed: u64 = @bitCast(time.tv_nsec);
+      break :_ time_seed; 
+    };
 
     r = Result(DialogueContext).ok(.{
       // FIXME:
       .nodes = nodes,
-      .callbacks = callbacks,
+      .functions = functions,
       .variables = .{
         .strings = strings,
         .booleans = booleans,
       },
-      .currentNodeIndex = 0,
+      .currentNodeIndex = dialogue_data.entryId,
+      .entryNodeIndex = dialogue_data.entryId,
+      .rand = std.rand.DefaultPrng.init(seed),
     });
 
     return r;
@@ -163,26 +193,68 @@ pub const DialogueContext = struct {
 
   pub fn deinit(self: *@This(), alloc: std.mem.Allocator) void {
     self.nodes.deinit(alloc);
-    alloc.free(self.callbacks);
+    alloc.free(self.functions);
     alloc.free(self.variables.strings);
     self.variables.booleans.deinit();
+  }
+
+  /// if the current node is an options node, choose the reply
+  pub fn reply(self: *@This(), reply_index: usize) StepResult {
+    const currNode = self.currentNode();
+    std.debug.assert(currNode == .reply);
+    {
+      @setRuntimeSafety(true);
+      self.currentNodeIndex = currNode.reply.nexts[reply_index];
+    }
+    return self.step();
   }
 
   pub fn step(self: *@This()) StepResult {
     while (true) {
       switch (self.currentNode()) {
-        .line => |n| {
-          // FIXME: this technically makes it mean nextNodeIndex!
-          self.currentNodeIndex = n.next.value;
-          return .{ .line = n.data };
+        .line => |v| {
+          if (v.next.valid)
+            // FIXME: technically this seems to mean nextNodeIndex!
+            self.currentNodeIndex = v.next.value;
+          return .{ .line = v.data };
         },
-        .random_switch => {},
-        .reply => {},
-        .lock => {},
-        .unlock => {},
-        .call => {},
-        // does it make sense for self.next to be invalid?
-        .goto => |n| { self.currentNodeIndex = n.next.value; },
+        .random_switch => |v| {
+          // guaranteed to be in [0, 1) range
+          const shot = self.rand.random().float(f32);
+          var acc: u64 = 0;
+          for (v.nexts, v.chances) |next, chance_count| {
+            const chance_proportion = @as(f64, @floatFromInt(acc))
+                                    / @as(f64, @floatFromInt(v.total_chances));
+            if (shot < chance_proportion) {
+              if (next.valid)
+                self.currentNodeIndex = next.value;
+              break;
+            }
+            acc += chance_count;
+          }
+        },
+        .reply => |v| {
+          return .{.options = .{ .texts = v.texts }};
+        },
+        .lock => |v| {
+          self.variables.booleans.unset(v.booleanVariableIndex);
+          if (v.next.valid)
+            self.currentNodeIndex = v.next.value;
+        },
+        .unlock => |v| {
+          self.variables.booleans.set(v.booleanVariableIndex);
+          if (v.next.valid)
+            self.currentNodeIndex = v.next.value;
+        },
+        .call => |v| {
+          if (self.functions[v.functionIndex]) |func| func();
+          if (v.next.valid)
+            self.currentNodeIndex = v.next.value;
+          // the user must call 'step' again to declare to "finish" their function
+        },
+        .goto => |v| {
+          self.currentNodeIndex = v.next.value;
+        },
       }
     }
   }
@@ -197,7 +269,7 @@ const DialogueJsonFormat = struct {
     // FIXME: these must be in sync with the implementation of Node!
     // TODO: generate these from Node type...
     line: ?@typeInfo(Node).Union.fields[0].type = null,
-    random_switch: ?@typeInfo(Node).Union.fields[1].type = null,
+    random_switch: ?RandomSwitch = null,
     reply: ?@typeInfo(Node).Union.fields[2].type = null,
     lock: ?@typeInfo(Node).Union.fields[3].type = null,
     unlock: ?@typeInfo(Node).Union.fields[4].type = null,
@@ -205,13 +277,13 @@ const DialogueJsonFormat = struct {
     goto: ?@typeInfo(Node).Union.fields[6].type = null,
 
     pub fn toNode(self: @This()) ?Node {
-      if (self.line) |v| return .{.line = v};
-      if (self.random_switch) |v| return .{.random_switch = v};
-      if (self.reply) |v| return .{.reply = v};
-      if (self.lock) |v| return .{.lock = v};
-      if (self.unlock) |v| return .{.unlock = v};
-      if (self.call) |v| return .{.call = v};
-      if (self.goto) |v| return .{.goto = v};
+      if (self.line)          |v| return .{.line = v};
+      if (self.random_switch) |v| return .{.random_switch = RandomSwitch.init(v.nexts, v.chances)};
+      if (self.reply)         |v| return .{.reply = v};
+      if (self.lock)          |v| return .{.lock = v};
+      if (self.unlock)        |v| return .{.unlock = v};
+      if (self.call)          |v| return .{.call = v};
+      if (self.goto)          |v| return .{.goto = v};
       return null;
     }
   },
@@ -244,7 +316,7 @@ test "create and run context to completion" {
     \\    }
     \\  ]
     \\}
-    , t.allocator
+    , t.allocator, .{}
   );
   defer if (ctx_result.is_ok()) ctx_result.value.deinit(t.allocator)
     // FIXME: need to add freeing logic to Result
@@ -255,17 +327,22 @@ test "create and run context to completion" {
   try t.expect(ctx_result.is_ok());
 
   var ctx = ctx_result.value;
-  // REPORTME: inlining expected causes comptiler alignment cast error
-  const expected = DialogueContext.StepResult{
-    .line = .{
-      .speaker = "test",
-      .text = "hello world!",
-    },
-  };
+  try t.expectEqual(@as(usize, 0), ctx.currentNodeIndex);
+
   const step_result_1 = ctx.step();
-  // FIXME: do expectEqual
+  // FIXME: add pointer-descending eql impl
   try t.expect(step_result_1 == .line);
-  try t.expectEqualStrings(expected.line.speaker, step_result_1.line.speaker);
-  try t.expectEqualStrings(expected.line.text, step_result_1.line.text);
+  try t.expectEqualStrings("test", step_result_1.line.speaker);
+  try t.expectEqualStrings("hello world!", step_result_1.line.text);
   try t.expectEqual(@as(usize, 1), ctx.currentNodeIndex);
+
+  const step_result_2 = ctx.step();
+  try t.expect(step_result_2 == .line);
+  try t.expectEqualStrings("test", step_result_2.line.speaker);
+  try t.expectEqualStrings("goodbye cruel world!", step_result_2.line.text);
+  try t.expectEqual(@as(usize, 2), ctx.currentNodeIndex);
+
+  const step_result_3 = ctx.step();
+  try t.expect(step_result_3 == .none);
+  try t.expectEqual(@as(usize, 2), ctx.currentNodeIndex);
 }
