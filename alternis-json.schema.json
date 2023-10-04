@@ -1,0 +1,61 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema",
+  "$id": "https://alternis.io/schemas/v1/alternis-json.schema.json",
+  "title": "AlternisDialogueV1",
+  "type": "object",
+  "properties": {
+    "entryId": {
+      "type": "number",
+      "description": "The value for an id property of one of the nodes at which the dialogue begins"
+    },
+    "publisher": {
+      "type": "object",
+      "properties": {
+        "username": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string"
+        }
+      }
+    },
+    "nodes": {
+      "description": "The list of nodes in the dialogue, each representing an event during dialogue",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id"],
+        "minProperties": 2,
+        "maxProperties": 2,
+        "properties": {
+          "id": {
+            "type": "number",
+            "description": "Unique numeric id for this node"
+          },
+          "line": {
+            "type": "object"
+            "description": "The payload for a dialogue event of type 'line', where a speaker says some text",
+            "properties": {
+              "data": {
+                "description": "properties of the spoken line",
+                "type": "object",
+                "required": ["speaker", "text"],
+                "properties": {
+                  "speaker": {
+                    "type": "string",
+                  },
+                  "text": {
+                    "type": "string",
+                  }
+                },
+                "additionalProperties": false
+              },
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  }
+}

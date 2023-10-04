@@ -269,7 +269,10 @@ const DialogueJsonFormat = struct {
     // FIXME: these must be in sync with the implementation of Node!
     // TODO: generate these from Node type...
     line: ?@typeInfo(Node).Union.fields[0].type = null,
-    random_switch: ?RandomSwitch = null,
+    random_switch: ?struct {
+      nexts: []const Next,
+      chances: []const u32,
+    } = null,
     reply: ?@typeInfo(Node).Union.fields[2].type = null,
     lock: ?@typeInfo(Node).Union.fields[3].type = null,
     unlock: ?@typeInfo(Node).Union.fields[4].type = null,
@@ -316,7 +319,8 @@ test "create and run context to completion" {
     \\    }
     \\  ]
     \\}
-    , t.allocator, .{}
+    , t.allocator
+    , .{}
   );
   defer if (ctx_result.is_ok()) ctx_result.value.deinit(t.allocator)
     // FIXME: need to add freeing logic to Result
