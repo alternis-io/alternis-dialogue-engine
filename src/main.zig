@@ -71,10 +71,7 @@ const Node = union (enum) {
   call: struct {
     functionIndex: Index,
     next: Next = .{},
-  },
-  goto: struct {
-    next: Next = .{},
-  },
+  }
 };
 
 /// A function implemented by the environment
@@ -252,9 +249,6 @@ pub const DialogueContext = struct {
             self.currentNodeIndex = v.next.value;
           // the user must call 'step' again to declare to "finish" their function
         },
-        .goto => |v| {
-          self.currentNodeIndex = v.next.value;
-        },
       }
     }
   }
@@ -277,7 +271,6 @@ const DialogueJsonFormat = struct {
     lock: ?@typeInfo(Node).Union.fields[3].type = null,
     unlock: ?@typeInfo(Node).Union.fields[4].type = null,
     call: ?@typeInfo(Node).Union.fields[5].type = null,
-    goto: ?@typeInfo(Node).Union.fields[6].type = null,
 
     pub fn toNode(self: @This()) ?Node {
       if (self.line)          |v| return .{.line = v};
@@ -286,7 +279,6 @@ const DialogueJsonFormat = struct {
       if (self.lock)          |v| return .{.lock = v};
       if (self.unlock)        |v| return .{.unlock = v};
       if (self.call)          |v| return .{.call = v};
-      if (self.goto)          |v| return .{.goto = v};
       return null;
     }
   },
