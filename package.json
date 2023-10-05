@@ -1,0 +1,15 @@
+{
+  "name": "root",
+  "private": true,
+  "version": "0.0.0",
+  "description": "alternis dialogue engine workspace for JavaScript components",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": {
+    "name": "Michael Belousov",
+    "email": "me@mikemikeb.com"
+  },
+  "license": "MIT"
+}
