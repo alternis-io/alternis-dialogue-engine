@@ -96,8 +96,9 @@ pub const DialogueContext = struct {
     booleans: std.DynamicBitSet,
   },
 
-  entryNodeIndex: usize,
-  currentNodeIndex: usize,
+  entry_node_index: usize,
+  // FIXME: optimize to fit in usize
+  current_node_index: ?usize,
 
   rand: std.rand.DefaultPrng,
 
@@ -176,16 +177,16 @@ pub const DialogueContext = struct {
         .strings = strings,
         .booleans = booleans,
       },
-      .currentNodeIndex = dialogue_data.entryId,
-      .entryNodeIndex = dialogue_data.entryId,
+      .current_node_index = dialogue_data.entryId,
+      .entry_node_index = dialogue_data.entryId,
       .rand = std.rand.DefaultPrng.init(seed),
     });
 
     return r;
   }
 
-  fn currentNode(self: @This()) Node {
-    return self.nodes.get(self.currentNodeIndex);
+  fn currentNode(self: @This()) ?Node {
+    if (self.current_node_index) |index| self.nodes.get(index) else null;
   }
 
   pub fn deinit(self: *@This(), alloc: std.mem.Allocator) void {
@@ -195,24 +196,32 @@ pub const DialogueContext = struct {
     self.variables.booleans.deinit();
   }
 
+  pub fn reset(self: @This()) void {
+    self.current_node_index = self.entry_node_index;
+  }
+
   /// if the current node is an options node, choose the reply
   pub fn reply(self: *@This(), reply_index: usize) StepResult {
     const currNode = self.currentNode();
     std.debug.assert(currNode == .reply);
     {
       @setRuntimeSafety(true);
-      self.currentNodeIndex = currNode.reply.nexts[reply_index];
+      self.current_node_index = currNode.reply.nexts[reply_index];
     }
     return self.step();
   }
 
   pub fn step(self: *@This()) StepResult {
     while (true) {
-      switch (self.currentNode()) {
+      const current_node = self.currentNode();
+      if (current_node == null)
+        return .none;
+
+      switch (current_node.?) {
         .line => |v| {
           if (v.next.valid)
             // FIXME: technically this seems to mean nextNodeIndex!
-            self.currentNodeIndex = v.next.value;
+            self.current_node_index = v.next.value;
           return .{ .line = v.data };
         },
         .random_switch => |v| {
@@ -224,7 +233,7 @@ pub const DialogueContext = struct {
                                     / @as(f64, @floatFromInt(v.total_chances));
             if (shot < chance_proportion) {
               if (next.valid)
-                self.currentNodeIndex = next.value;
+                self.current_node_index = next.value;
               break;
             }
             acc += chance_count;
@@ -236,17 +245,17 @@ pub const DialogueContext = struct {
         .lock => |v| {
           self.variables.booleans.unset(v.booleanVariableIndex);
           if (v.next.valid)
-            self.currentNodeIndex = v.next.value;
+            self.current_node_index = v.next.value;
         },
         .unlock => |v| {
           self.variables.booleans.set(v.booleanVariableIndex);
           if (v.next.valid)
-            self.currentNodeIndex = v.next.value;
+            self.current_node_index = v.next.value;
         },
         .call => |v| {
           if (self.functions[v.functionIndex]) |func| func();
           if (v.next.valid)
-            self.currentNodeIndex = v.next.value;
+            self.current_node_index = v.next.value;
           // the user must call 'step' again to declare to "finish" their function
         },
       }
@@ -314,6 +323,7 @@ test "create and run context to completion" {
     , t.allocator
     , .{}
   );
+
   defer if (ctx_result.is_ok()) ctx_result.value.deinit(t.allocator)
     // FIXME: need to add freeing logic to Result
     else t.allocator.free(@constCast(ctx_result.err.?));
@@ -323,22 +333,22 @@ test "create and run context to completion" {
   try t.expect(ctx_result.is_ok());
 
   var ctx = ctx_result.value;
-  try t.expectEqual(@as(usize, 0), ctx.currentNodeIndex);
+  try t.expectEqual(@as(usize, 0), ctx.current_node_index);
 
   const step_result_1 = ctx.step();
   // FIXME: add pointer-descending eql impl
   try t.expect(step_result_1 == .line);
   try t.expectEqualStrings("test", step_result_1.line.speaker);
   try t.expectEqualStrings("hello world!", step_result_1.line.text);
-  try t.expectEqual(@as(usize, 1), ctx.currentNodeIndex);
+  try t.expectEqual(@as(usize, 1), ctx.current_node_index);
 
   const step_result_2 = ctx.step();
   try t.expect(step_result_2 == .line);
   try t.expectEqualStrings("test", step_result_2.line.speaker);
   try t.expectEqualStrings("goodbye cruel world!", step_result_2.line.text);
-  try t.expectEqual(@as(usize, 2), ctx.currentNodeIndex);
+  try t.expectEqual(@as(usize, 1), ctx.current_node_index);
 
   const step_result_3 = ctx.step();
   try t.expect(step_result_3 == .none);
-  try t.expectEqual(@as(usize, 2), ctx.currentNodeIndex);
+  try t.expectEqual(@as(usize, 1), ctx.current_node_index);
 }
