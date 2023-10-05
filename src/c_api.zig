@@ -20,3 +20,4 @@ export fn ade_dialogue_ctx_create_json(json_ptr: [*]const u8, json_len: usize) ?
 test "create context without allocator set fails" {
   DialogueContext.
 }
+

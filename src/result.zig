@@ -2,9 +2,9 @@ const std = @import("std");
 const builtin = @import("builtin");
 
 fn fmtStringId(
-comptime fmt_str: []const u8
-// FIXME: also need to take the args into account, which can be done by generating a custom type
-// comptime fmt_args_type: type
+  comptime fmt_str: []const u8
+  // FIXME: also need to take the args into account, which can be done by generating a custom type
+  // comptime fmt_args_type: type
 ) usize {
   return @intFromPtr(fmt_str.ptr);
 }

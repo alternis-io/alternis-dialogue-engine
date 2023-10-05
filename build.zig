@@ -2,7 +2,6 @@ const std = @import("std");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
-
     const optimize = b.standardOptimizeOption(.{});
 
     const lib = b.addStaticLibrary(.{
@@ -26,4 +25,19 @@ pub fn build(b: *std.Build) void {
 
     const test_step = b.step("test", "Run library tests");
     test_step.dependOn(&run_main_tests.step);
+
+    const web_step = b.step("web", "Build for web");
+    var web_target = target;
+    web_target.cpu_arch = .wasm32;
+    web_target.os_tag = .freestanding;
+    const web_lib = b.addSharedLibrary(.{
+        .name = "alternis",
+        .root_source_file = std.build.FileSource.relative("src/wasm_main.zig"),
+        .target = web_target,
+        .optimize = optimize,
+    });
+    web_lib.rdynamic = true;
+    b.installArtifact(web_lib);
+    const web_lib_install = b.addInstallArtifact(web_lib, .{});
+    web_step.dependOn(&web_lib_install.step);
 }
