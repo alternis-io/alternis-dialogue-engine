@@ -6,7 +6,7 @@ pub fn build(b: *std.Build) void {
 
     const lib = b.addStaticLibrary(.{
         .name = "alternis",
-        .root_source_file = .{ .path = "src/main.zig" },
+        .root_source_file = .{ .path = "src/c_api.zig" },
         .target = target,
         .optimize = optimize,
     });
