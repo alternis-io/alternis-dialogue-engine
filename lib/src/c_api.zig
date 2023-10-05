@@ -31,7 +31,8 @@ export fn ade_dialogue_ctx_create_json(json_ptr: [*]const u8, json_len: usize) ?
 }
 
 export fn ade_dialogue_ctx_destroy(dialogue_ctx: ?*Api.DialogueContext) void {
-    alloc.?.allocator().destroy(dialogue_ctx);
+    if (dialogue_ctx) |ptr|
+        alloc.?.allocator().destroy(ptr);
 }
 
 const Line = extern struct {
