@@ -6,25 +6,26 @@ const Result = @import("./result.zig").Result;
 const Index = usize;
 
 // NOTE: probably possible to make this a tagged union with a u1 tag, or just a ?u31...
-const Next = packed struct {
-  valid: bool = false,
-  value: u31 = undefined,
+const Next = ?u31;
 
-  pub fn fromOptionalInt(int: anytype) Next {
-    @setRuntimeSafety(true);
-    return Next{
-      .valid = int != null,
-      .value = @intCast(int.?),
-    };
-  }
+fn intCastNext(comptime T: type, n: Next) ?T {
+  return if (n) |v| @intCast(v) else null;
+}
 
-  pub fn jsonParse(allocator: std.mem.Allocator, source: anytype, options: json.ParseOptions) !@This() {
-    if (try source.peekNextTokenType() == .null)
-      return .{};
-    const value = try json.innerParse(u31, allocator, source, options);
-    return .{ .value = value, .valid = true };
-  }
-};
+pub fn fromOptionalInt(int: anytype) Next {
+  @setRuntimeSafety(true);
+  return Next{
+    .valid = int != null,
+    .value = @intCast(int.?),
+  };
+}
+
+pub fn jsonParse(allocator: std.mem.Allocator, source: anytype, options: json.ParseOptions) !@This() {
+  if (try source.peekNextTokenType() == .null)
+    return .{};
+  const value = try json.innerParse(u31, allocator, source, options);
+  return .{ .value = value, .valid = true };
+}
 
 test "Next is u32" {
   try t.expectEqual(@bitSizeOf(Next), 32);
@@ -52,25 +53,25 @@ const RandomSwitch = struct {
 const Node = union (enum) {
   line: struct {
     data: DialogueEntry,
-    next: Next = .{},
+    next: Next = null,
   },
   random_switch: RandomSwitch,
   reply: struct {
-    nexts: []const Next, // does it make sense for these to be optional?
+    nexts: []const Next,
     /// utf8 assumed
     texts: []const u8,
   },
   lock: struct {
     booleanVariableIndex: Index,
-    next: Next = .{},
+    next: Next = null,
   },
   unlock: struct {
     booleanVariableIndex: Index,
-    next: Next = .{},
+    next: Next = null,
   },
   call: struct {
     functionIndex: Index,
-    next: Next = .{},
+    next: Next = null,
   }
 };
 
@@ -186,7 +187,9 @@ pub const DialogueContext = struct {
   }
 
   fn currentNode(self: @This()) ?Node {
-    if (self.current_node_index) |index| self.nodes.get(index) else null;
+    return if (self.current_node_index) |index|
+      self.nodes.get(index)
+    else null;
   }
 
   pub fn deinit(self: *@This(), alloc: std.mem.Allocator) void {
@@ -219,9 +222,8 @@ pub const DialogueContext = struct {
 
       switch (current_node.?) {
         .line => |v| {
-          if (v.next.valid)
-            // FIXME: technically this seems to mean nextNodeIndex!
-            self.current_node_index = v.next.value;
+          // FIXME: technically this seems to mean nextNodeIndex!
+          self.current_node_index = intCastNext(usize, v.next);
           return .{ .line = v.data };
         },
         .random_switch => |v| {
@@ -232,8 +234,8 @@ pub const DialogueContext = struct {
             const chance_proportion = @as(f64, @floatFromInt(acc))
                                     / @as(f64, @floatFromInt(v.total_chances));
             if (shot < chance_proportion) {
-              if (next.valid)
-                self.current_node_index = next.value;
+              if (next) |n|
+                self.current_node_index = n;
               break;
             }
             acc += chance_count;
@@ -244,18 +246,15 @@ pub const DialogueContext = struct {
         },
         .lock => |v| {
           self.variables.booleans.unset(v.booleanVariableIndex);
-          if (v.next.valid)
-            self.current_node_index = v.next.value;
+          self.current_node_index = intCastNext(usize, v.next);
         },
         .unlock => |v| {
           self.variables.booleans.set(v.booleanVariableIndex);
-          if (v.next.valid)
-            self.current_node_index = v.next.value;
+          self.current_node_index = intCastNext(usize, v.next);
         },
         .call => |v| {
           if (self.functions[v.functionIndex]) |func| func();
-          if (v.next.valid)
-            self.current_node_index = v.next.value;
+          self.current_node_index = intCastNext(usize, v.next);
           // the user must call 'step' again to declare to "finish" their function
         },
       }
@@ -333,22 +332,22 @@ test "create and run context to completion" {
   try t.expect(ctx_result.is_ok());
 
   var ctx = ctx_result.value;
-  try t.expectEqual(@as(usize, 0), ctx.current_node_index);
+  try t.expectEqual(@as(?usize, 0), ctx.current_node_index);
 
   const step_result_1 = ctx.step();
   // FIXME: add pointer-descending eql impl
   try t.expect(step_result_1 == .line);
   try t.expectEqualStrings("test", step_result_1.line.speaker);
   try t.expectEqualStrings("hello world!", step_result_1.line.text);
-  try t.expectEqual(@as(usize, 1), ctx.current_node_index);
+  try t.expectEqual(@as(?usize, 1), ctx.current_node_index);
 
   const step_result_2 = ctx.step();
   try t.expect(step_result_2 == .line);
   try t.expectEqualStrings("test", step_result_2.line.speaker);
   try t.expectEqualStrings("goodbye cruel world!", step_result_2.line.text);
-  try t.expectEqual(@as(usize, 1), ctx.current_node_index);
+  try t.expectEqual(@as(?usize, 1), ctx.current_node_index);
 
   const step_result_3 = ctx.step();
   try t.expect(step_result_3 == .none);
-  try t.expectEqual(@as(usize, 1), ctx.current_node_index);
+  try t.expectEqual(@as(?usize, 1), ctx.current_node_index);
 }
