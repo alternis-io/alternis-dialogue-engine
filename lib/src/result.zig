@@ -63,7 +63,7 @@ fn ResultDecls(comptime R: type, comptime E: type, comptime Self: type) type {
 }
 
 pub fn Result(comptime R: type) type {
-  // FIXME: gross
+  // zig claims it will add a syntax to select the externess of a struct at comptime
   if (@typeInfo(R) == .Struct and @typeInfo(R).Struct.layout == .Extern or @typeInfo(R) == .Union and @typeInfo(R).Union.layout == .Extern) {
     return extern struct {
       /// not initialized if err is not 0/null
@@ -76,7 +76,7 @@ pub fn Result(comptime R: type) type {
 
       const Self = @This();
 
-      pub usingnamespace ResultDecls(R, @This());
+      pub usingnamespace ResultDecls(R, @typeInfo(@This()).Struct.fields[1].type, @This());
     };
   } else {
     return struct {
