@@ -1,0 +1,23 @@
+{
+  "name": "alternis-js",
+  "version": "0.1.0",
+  "description": "javascript bindings for the wasm version of the alternis dialogue engine",
+  "main": "lib/index.js",
+  "scripts": {
+    "build": "tsc -b .",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "alternis",
+    "dialogue",
+    "dialogue-engine"
+  ],
+  "author": {
+    "name": "Michael Belousov",
+    "email": "me@mikemikeb.com"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "alternis-wasm": "workspace:^"
+  }
+}

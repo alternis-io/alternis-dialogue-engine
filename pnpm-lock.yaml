@@ -1,0 +1,17 @@
+lockfileVersion: '6.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .: {}
+
+  js:
+    dependencies:
+      alternis-wasm:
+        specifier: workspace:^
+        version: link:../lib
+
+  lib: {}

@@ -1,0 +1,16 @@
+{
+  "name": "alternis-wasm",
+  "version": "0.1.0",
+  "description": "the wasm bundle of the alternis dialogue engine library",
+  "main": "index.js",
+  "scripts": {
+    "build": "zig build web",
+    "test": "zig build test"
+  },
+  "keywords": ["alternis", "dialogue", "dialogue-engine"],
+  "author": {
+    "name": "Michael Belousov",
+    "email": "me@mikemikeb.com"
+  },
+  "license": "MIT"
+}
