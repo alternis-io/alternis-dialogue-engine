@@ -5,18 +5,10 @@ const Result = @import("./result.zig").Result;
 
 const Index = usize;
 
-// NOTE: probably possible to make this a tagged union with a u1 tag, or just a ?u31...
+/// basically packed ?u31
 const Next = packed struct {
   valid: bool = false,
   value: u31 = undefined,
-
-  pub fn fromOptionalInt(int: anytype) Next {
-    @setRuntimeSafety(true);
-    return Next{
-      .valid = int != null,
-      .value = @intCast(int.?),
-    };
-  }
 
   pub fn jsonParse(allocator: std.mem.Allocator, source: anytype, options: json.ParseOptions) !@This() {
     if (try source.peekNextTokenType() == .null)
@@ -24,18 +16,22 @@ const Next = packed struct {
     const value = try json.innerParse(u31, allocator, source, options);
     return .{ .value = value, .valid = true };
   }
+
+  /// for more idiomatic usage in contexts where packing is unimportant
+  pub fn toOptionalInt(self: @This(), comptime T: type) ?T {
+    return if (!self.valid) null else @intCast(self.value);
+  }
 };
 
 test "Next is u32" {
   try t.expectEqual(@bitSizeOf(Next), 32);
 }
 
-const DialogueEntry = struct {
+const Line = struct {
   speaker: []const u8,
   text: []const u8,
   metadata: ?[]const u8 = null,
 };
-
 
 const RandomSwitch = struct {
   nexts: []const Next, // does it make sense for these to be optional?
@@ -51,7 +47,7 @@ const RandomSwitch = struct {
 
 const Node = union (enum) {
   line: struct {
-    data: DialogueEntry,
+    data: Line,
     next: Next = .{},
   },
   random_switch: RandomSwitch,
@@ -108,7 +104,7 @@ pub const DialogueContext = struct {
     options: struct {
       texts: []const u8,
     },
-    line: DialogueEntry,
+    line: Line,
   };
 
   pub const InitOpts = struct {
@@ -186,7 +182,7 @@ pub const DialogueContext = struct {
   }
 
   fn currentNode(self: @This()) ?Node {
-    if (self.current_node_index) |index| self.nodes.get(index) else null;
+    return if (self.current_node_index) |index| self.nodes.get(index) else null;
   }
 
   pub fn deinit(self: *@This(), alloc: std.mem.Allocator) void {
@@ -219,9 +215,8 @@ pub const DialogueContext = struct {
 
       switch (current_node.?) {
         .line => |v| {
-          if (v.next.valid)
-            // FIXME: technically this seems to mean nextNodeIndex!
-            self.current_node_index = v.next.value;
+          // FIXME: technically this seems to mean nextNodeIndex!
+          self.current_node_index = v.next.toOptionalInt(usize);
           return .{ .line = v.data };
         },
         .random_switch => |v| {
@@ -232,8 +227,7 @@ pub const DialogueContext = struct {
             const chance_proportion = @as(f64, @floatFromInt(acc))
                                     / @as(f64, @floatFromInt(v.total_chances));
             if (shot < chance_proportion) {
-              if (next.valid)
-                self.current_node_index = next.value;
+              self.current_node_index = next.toOptionalInt(usize);
               break;
             }
             acc += chance_count;
@@ -244,18 +238,15 @@ pub const DialogueContext = struct {
         },
         .lock => |v| {
           self.variables.booleans.unset(v.booleanVariableIndex);
-          if (v.next.valid)
-            self.current_node_index = v.next.value;
+          self.current_node_index = v.next.toOptionalInt(usize);
         },
         .unlock => |v| {
           self.variables.booleans.set(v.booleanVariableIndex);
-          if (v.next.valid)
-            self.current_node_index = v.next.value;
+          self.current_node_index = v.next.toOptionalInt(usize);
         },
         .call => |v| {
           if (self.functions[v.functionIndex]) |func| func();
-          if (v.next.valid)
-            self.current_node_index = v.next.value;
+          self.current_node_index = v.next.toOptionalInt(usize);
           // the user must call 'step' again to declare to "finish" their function
         },
       }
@@ -333,22 +324,22 @@ test "create and run context to completion" {
   try t.expect(ctx_result.is_ok());
 
   var ctx = ctx_result.value;
-  try t.expectEqual(@as(usize, 0), ctx.current_node_index);
+  try t.expectEqual(@as(?usize, 0), ctx.current_node_index);
 
   const step_result_1 = ctx.step();
   // FIXME: add pointer-descending eql impl
   try t.expect(step_result_1 == .line);
   try t.expectEqualStrings("test", step_result_1.line.speaker);
   try t.expectEqualStrings("hello world!", step_result_1.line.text);
-  try t.expectEqual(@as(usize, 1), ctx.current_node_index);
+  try t.expectEqual(@as(?usize, 1), ctx.current_node_index);
 
   const step_result_2 = ctx.step();
   try t.expect(step_result_2 == .line);
   try t.expectEqualStrings("test", step_result_2.line.speaker);
   try t.expectEqualStrings("goodbye cruel world!", step_result_2.line.text);
-  try t.expectEqual(@as(usize, 1), ctx.current_node_index);
+  try t.expectEqual(@as(?usize, null), ctx.current_node_index);
 
   const step_result_3 = ctx.step();
   try t.expect(step_result_3 == .none);
-  try t.expectEqual(@as(usize, 1), ctx.current_node_index);
+  try t.expectEqual(@as(?usize, null), ctx.current_node_index);
 }
