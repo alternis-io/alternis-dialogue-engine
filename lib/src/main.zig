@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const json = std.json;
 const t = std.testing;
 const Result = @import("./result.zig").Result;
@@ -158,6 +159,9 @@ pub const DialogueContext = struct {
       catch |e| { r = Result(DialogueContext).fmt_err(alloc, "{}", .{e}); return r; };
 
     const seed = opts.random_seed orelse _: {
+      if (builtin.os.tag == .freestanding)
+        @panic("automatic seed not supported on this platform");
+
       var time: std.os.system.timespec = undefined;
       std.os.clock_gettime(std.os.CLOCK.REALTIME, &time)
         catch |e| { r = Result(DialogueContext).fmt_err(alloc, "{}", .{e}); return r; };
@@ -256,9 +260,9 @@ pub const DialogueContext = struct {
 
 // FIXME: I think it would be more efficient to replace this with a custom json parsing routine
 const DialogueJsonFormat = struct {
-  entryId: u64,
+  entryId: usize,
   nodes: []const struct {
-    id: u64,
+    id: usize,
 
     // FIXME: these must be in sync with the implementation of Node!
     // TODO: generate these from Node type...

@@ -10,7 +10,6 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-
     b.installArtifact(lib);
 
     // Creates a step for unit testing. This only builds the test executable
@@ -38,6 +37,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     web_lib.rdynamic = true;
+    web_lib.export_symbol_names = &.{"ade_set_alloc"};
     b.installArtifact(web_lib);
     const web_lib_install = b.addInstallArtifact(web_lib, .{});
     web_step.dependOn(&web_lib_install.step);

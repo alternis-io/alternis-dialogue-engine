@@ -35,6 +35,7 @@ export fn ade_dialogue_ctx_destroy(dialogue_ctx: ?*Api.DialogueContext) void {
         alloc.?.allocator().destroy(ptr);
 }
 
+// FIXME: extern'ing slices (this way) is ugly..
 const Line = extern struct {
     speaker_ptr: [*]const u8,
     speaker_len: usize = 0,
@@ -44,8 +45,6 @@ const Line = extern struct {
     metadata_len: usize = 0,
 };
 
-// FIXME: is it really better to have to convert all this instead of just making the api
-// internal layout extern compatible?
 const StepResult = extern struct {
     /// tag indicates which field is active
     tag: enum (u8) {
