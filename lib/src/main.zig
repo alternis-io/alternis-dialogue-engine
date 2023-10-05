@@ -284,9 +284,7 @@ const DialogueJsonFormat = struct {
   },
 };
 
-test "create and run context to completion" {
-  // FIXME: load a larger one from tests dir
-  var ctx_result = DialogueContext.initFromJson(
+pub const small_test_json =
     \\{
     \\  "entryId": 0,
     \\  "nodes": [
@@ -311,9 +309,11 @@ test "create and run context to completion" {
     \\    }
     \\  ]
     \\}
-    , t.allocator
-    , .{}
-  );
+;
+
+test "create and run context to completion" {
+  // FIXME: load a larger one from tests dir
+  var ctx_result = DialogueContext.initFromJson(small_test_json, t.allocator , .{});
 
   defer if (ctx_result.is_ok()) ctx_result.value.deinit(t.allocator)
     // FIXME: need to add freeing logic to Result

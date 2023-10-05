@@ -3,12 +3,12 @@
 const std = @import("std");
 
 pub const ConfigurableSimpleAlloc = struct {
-    malloc: *fn(usize) ?*anyopaque,
-    free: *fn(?*anyopaque) void,
+    malloc: *const fn(usize) callconv(.C) ?*anyopaque,
+    free: *const fn(?*anyopaque) callconv(.C) void,
 
     pub fn init(
-        in_malloc: *fn(usize) ?*anyopaque,
-        in_free: *fn(?*anyopaque) void,
+        in_malloc: *const fn(usize) callconv(.C) ?*anyopaque,
+        in_free: *const fn(?*anyopaque) callconv(.C) void,
     ) @This() {
         return .{
             .malloc = in_malloc,

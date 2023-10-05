@@ -16,10 +16,11 @@ pub fn build(b: *std.Build) void {
     // Creates a step for unit testing. This only builds the test executable
     // but does not run it.
     const main_tests = b.addTest(.{
-        .root_source_file = .{ .path = "src/main.zig" },
+        .root_source_file = .{ .path = "src/c_api.zig" },
         .target = target,
         .optimize = optimize,
     });
+    main_tests.linkLibC(); // tests use libc malloc as the user configured allocator
 
     const run_main_tests = b.addRunArtifact(main_tests);
 
