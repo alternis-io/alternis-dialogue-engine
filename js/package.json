@@ -19,5 +19,8 @@
   "license": "MIT",
   "dependencies": {
     "alternis-wasm": "workspace:^"
+  },
+  "devDependencies": {
+    "typescript": "^5.2.2"
   }
 }

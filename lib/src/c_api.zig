@@ -54,16 +54,20 @@ const Line = extern struct {
 const StepResult = extern struct {
     /// tag indicates which field is active
     tag: enum (u8) {
-        none,
-        options,
-        line,
+        none = 0,
+        options = 1,
+        line = 2,
     } = .none,
 
     /// data for each field
     data: extern union {
         none: void,
         options: extern struct {
-            texts: [*]const u8,
+            // FIXME: need a higher-level slice concept
+            texts: [*]const struct {
+                ptr: [*]const u8,
+                len: usize,
+            },
             texts_len: usize,
         },
         line: Line,
