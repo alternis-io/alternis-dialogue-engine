@@ -51,7 +51,7 @@ describe("smoke", () => {
 
     const step_result_3 = ctx.step();
     assert.deepStrictEqual(step_result_3, {
-      none: undefined,
+      none: true,
     });
 
     ctx.dispose();

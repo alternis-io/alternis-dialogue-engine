@@ -33,7 +33,7 @@ export interface WasmHelper<T extends Record<string, any> = {}> {
   unmarshalString(ptr: number, len: number, encoding?: string): WasmStr;
 
   marshalSlice(str: string): WasmStr;
-  unmarshalSlice(ptr: number, len: number, encoding?: string): WasmStr;
+  unmarshalSlice(ptr: number, encoding?: string): WasmStr;
 }
 
 export function ptrToStr(inst: CompatibleWebAssemblyInstance, ptr: number, encoding?: string): WasmStr {
@@ -84,8 +84,11 @@ export function makeWasmHelper<T extends Record<string, any> = {}>(wasmInst: Web
       throw Error("unimplemented");
     },
 
-    unmarshalSlice(ptr: number, len: number, encoding = "utf8"): WasmStr {
-      throw Error("unimplemented");
+    unmarshalSlice(ptr: number, encoding = "utf8"): WasmStr {
+      const view = new DataView(wasmInst.exports.memory.buffer, ptr);
+      const data = view.getUint32(0, true);
+      const len = view.getUint32(4, true);
+      return unmarshalString(wasmInst, data, len, encoding)
     }
   }
 }

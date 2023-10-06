@@ -1,6 +1,38 @@
 import { WasmHelper, makeWasmHelper, unmarshalString } from "./wasm";
 
 export namespace DialogueContext {
+  export namespace Slice {
+    export function unmarshal(helper: WasmHelper, view: DataView) {
+      // FIXME: support wasm64
+      const dataPtr = view.getUint32(0, true);
+      if (dataPtr === 0) return undefined;
+      const len = view.getUint32(4, true);
+      return unmarshalString(helper._instance, dataPtr, len);
+    }
+
+    export const byteSize = 8;
+  }
+
+  // FIXME: need a better name for this
+  export namespace Strings {
+    export function unmarshal(helper: WasmHelper, view: DataView) {
+      const result: string[] = [];
+
+      const dataPtr = view.getUint32(0, true);
+      if (dataPtr === 0) return [];
+      const len = view.getUint32(4, true);
+
+      for (let i = 0; i < len; ++i) {
+        const itemView = new DataView(view.buffer, dataPtr + i * Slice.byteSize);
+        result.push(Slice.unmarshal(helper, itemView)!.value);
+      }
+
+      return result;
+    }
+
+    export const byteSize = 8;
+  }
+
   export interface Line {
     speaker: string,
     text: string,
@@ -9,21 +41,20 @@ export namespace DialogueContext {
 
   export namespace Line {
     export function unmarshal(helper: WasmHelper, view: DataView): Line {
-      // FIXME: support wasm64
-      const speaker_ptr = view.getUint32(0, true);
-      const speaker_len = view.getUint32(4, true);
-      const text_ptr = view.getUint32(8, true);
-      const text_len = view.getUint32(12, true);
-      const metadata_ptr = view.getUint32(16, true);
-      const metadata_len = view.getUint32(20, true);
+      const speakerView = new DataView(view.buffer, view.byteOffset + 0);
+      const speaker = Slice.unmarshal(helper, speakerView);
+      if (speaker === undefined) throw Error("speaker was null");
+      const textView = new DataView(view.buffer, view.byteOffset + 8);
+      const text = Slice.unmarshal(helper, textView)
+      if (text === undefined) throw Error("text was null");
+      const metadataView = new DataView(view.buffer, view.byteOffset + 16);
+      const metadata = Slice.unmarshal(helper, metadataView)
 
-      // FIXME: leak
+
       return {
-        speaker: helper.unmarshalString(speaker_ptr, speaker_len).value,
-        text: helper.unmarshalString(text_ptr, text_len).value,
-        metadata: metadata_ptr !== 0
-          ? helper.unmarshalString(metadata_ptr, metadata_len).value
-          : undefined,
+        speaker: speaker.value,
+        text: text.value,
+        metadata: metadata?.value,
       };
     }
 
@@ -37,7 +68,7 @@ export namespace DialogueContext {
   export type StepResult =
     | { line: Line }
     | { options: Option[] }
-    | { none: null }
+    | { none: true }
 
   // FIXME: generate this code
   export namespace StepResult {
@@ -50,29 +81,17 @@ export namespace DialogueContext {
     export function unmarshal(helper: WasmHelper, view: DataView): StepResult {
       const tag = view.getUint8(0);
       if (tag == Tag.None)
-        return { none: null };
+        return { none: true };
 
       // next field should be padded over to next 4-byte alignment boundary
       const payloadView = new DataView(view.buffer, view.byteOffset + 4, view.byteLength - 4);
 
       if (tag == Tag.Options) {
-        const options: Option[] = [];
+        const textsView = new DataView(view.buffer, payloadView.byteOffset + 0);
+        const strings = Strings.unmarshal(helper, textsView)
+          .map(s => ({ text: s }));
 
-        const texts_ptr = view.getUint32(4, true);
-        const texts_len = view.getUint32(8, true);
-        const byteSizeOfText = 8;
-        const textsView = new DataView(helper._instance.exports.memory.buffer, texts_ptr, byteSizeOfText * texts_len);
-
-        for (let i = 0; i < texts_len; ++i) {
-          const text_ptr = textsView.getUint32(i * byteSizeOfText, true);
-          const text_len = textsView.getUint32(i * byteSizeOfText + 4, true);
-          options.push({
-            // FIXME: leak
-            text: helper.unmarshalString(text_ptr, text_len).value
-          });
-        }
-
-        return { options };
+        return { options: strings };
       }
 
       if (tag == Tag.Line)
@@ -95,7 +114,7 @@ export interface DialogueContext {
 }
 
 interface NativeModuleExports {
-  ade_dialogue_ctx_create_json(json_ptr: number, json_len: number, err: number): number;
+  ade_dialogue_ctx_create_json(json_ptr: number, json_len: number, random_seed: bigint, err: number): number;
   ade_dialogue_ctx_destroy(dialogue_ctx: number): void;
   ade_dialogue_ctx_step(dialogue_ctx: number, result_slot: number): void;
 }
@@ -132,7 +151,7 @@ export async function makeDialogueContext(json: string): Promise<DialogueContext
   const stepResultPtr = nativeLib._instance.exports.malloc(DialogueContext.StepResult.byteSize);
   const getStepResultView = () => new DataView(nativeLib._instance.exports.memory.buffer, stepResultPtr);
 
-  const nativeDlgCtx = nativeLib._instance.exports.ade_dialogue_ctx_create_json(wasmJsonStr.ptr, wasmJsonStr.len, errSlot);
+  const nativeDlgCtx = nativeLib._instance.exports.ade_dialogue_ctx_create_json(wasmJsonStr.ptr, wasmJsonStr.len, 0n, errSlot);
   const errPtr = getErrView().getUint32(0, true);
   if (errPtr !== 0) {
     const err = nativeLib.ptrToStr(errPtr);

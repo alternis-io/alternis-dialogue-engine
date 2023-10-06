@@ -2,6 +2,8 @@ const std = @import("std");
 const builtin = @import("builtin");
 const t = std.testing;
 
+extern fn _debug_print([*]const u8, len: usize) void;
+
 const Api = @import("./main.zig");
 const Slice = @import("./slice.zig").Slice;
 const OptSlice = @import("./slice.zig").OptSlice;
@@ -25,8 +27,18 @@ pub fn setZigAlloc(in_alloc: std.mem.Allocator) void {
     alloc = in_alloc;
 }
 
-export fn ade_dialogue_ctx_create_json(json_ptr: [*]const u8, json_len: usize, err: ?*?[*:0]const u8) ?*Api.DialogueContext {
-    const ctx_result = Api.DialogueContext.initFromJson(json_ptr[0..json_len], alloc, .{});
+export fn ade_dialogue_ctx_create_json(
+    json_ptr: [*]const u8,
+    json_len: usize,
+    // TODO: make this optional
+    random_seed: u64,
+    err: ?*?[*:0]const u8
+) ?*Api.DialogueContext {
+    const ctx_result = Api.DialogueContext.initFromJson(
+        json_ptr[0..json_len],
+        alloc,
+        .{ .random_seed = random_seed }
+    );
 
     // FIXME: better return err (e.g. this leaks)
     if (ctx_result.is_err() and err != null) {
@@ -91,6 +103,11 @@ export fn ade_dialogue_ctx_step(dialogue_ctx: *Api.DialogueContext, result_loc: 
             .texts = Slice(Slice(u8)).fromZig(result.options.texts),
         } } },
     };
+
+    if (std.meta.activeTag(result) == .line) {
+        const speaker = result_loc.?.*.data.line.speaker;
+        _debug_print(speaker.ptr, speaker.len);
+    }
 }
 
 // for now this just invokes failing allocator and panics...
@@ -102,7 +119,9 @@ export fn ade_dialogue_ctx_step(dialogue_ctx: *Api.DialogueContext, result_loc: 
 test "c_api smoke test" {
     setZigAlloc(std.testing.allocator);
 
-    var ctx = ade_dialogue_ctx_create_json(Api.small_test_json.ptr, Api.small_test_json.len);
+    var ctx = ade_dialogue_ctx_create_json(
+        Api.small_test_json.ptr, Api.small_test_json.len, 0, null
+    );
     try t.expect(ctx != null);
     defer ade_dialogue_ctx_destroy(ctx.?);
 

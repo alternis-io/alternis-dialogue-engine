@@ -26,6 +26,23 @@
       import "./src/index.ts"
       import { makeDialogueContext } from "./src/index.ts";
 
+      function assert(cond, msg = "assertion error") {
+        if (cond) return;
+        alert(msg);
+        throw Error(msg);
+      }
+
+      function deepEqual(a, b) {
+        return JSON.stringify(a) === JSON.stringify(b);
+      }
+
+      function assertDeepEqual(a, b, msg) {
+        const cond = deepEqual(a, b);
+        if (cond) return;
+        console.log("not equal:", a, b);
+        assert(cond, "not deep equal, see console");
+      }
+
       const smallTestJson = {
         "entryId": 0,
         "nodes": [
@@ -54,27 +71,27 @@
       const ctx = await makeDialogueContext(JSON.stringify(smallTestJson));
 
       const step_result_1 = ctx.step();
-      assert.deepStrictEqual(step_result_1, {
+      assertDeepEqual(step_result_1, {
         line:  {
           speaker: "test",
           text: "hello world!",
           metadata: undefined,
         },
-      });
+      }, "step_result_1");
 
       const step_result_2 = ctx.step();
-      assert.deepStrictEqual(step_result_2, {
+      assertDeepEqual(step_result_2, {
         line:  {
           speaker: "test",
           text: "goodbye cruel world!",
           metadata: undefined,
         },
-      });
+      }, "step_result_2");
 
       const step_result_3 = ctx.step();
-      assert.deepStrictEqual(step_result_3, {
-        none: undefined,
-      });
+      assertDeepEqual(step_result_3, {
+        none: null,
+      }, "step_result_3");
 
       ctx.dispose();
     </script>
