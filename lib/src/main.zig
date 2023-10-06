@@ -215,28 +215,25 @@ pub const DialogueContext = struct {
     self.variables.booleans.deinit();
   }
 
-  pub fn reset(self: @This()) void {
+  pub fn reset(self: *@This()) void {
     self.current_node_index = self.entry_node_index;
   }
 
   /// if the current node is an options node, choose the reply
-  pub fn reply(self: *@This(), reply_index: usize) StepResult {
-    const currNode = self.currentNode();
+  pub fn reply(self: *@This(), reply_index: usize) void {
+    const currNode = self.currentNode() orelse return;
     std.debug.assert(currNode == .reply);
     {
       @setRuntimeSafety(true);
-      self.current_node_index = currNode.reply.nexts[reply_index];
+      self.current_node_index = currNode.reply.nexts[reply_index].toOptionalInt(usize);
     }
-    return self.step();
   }
 
   pub fn step(self: *@This()) StepResult {
     while (true) {
-      const current_node = self.currentNode();
-      if (current_node == null)
-        return .none;
+      const current_node = self.currentNode() orelse return .none;
 
-      switch (current_node.?) {
+      switch (current_node) {
         .line => |v| {
           // FIXME: technically this seems to mean nextNodeIndex!
           self.current_node_index = v.next.toOptionalInt(usize);

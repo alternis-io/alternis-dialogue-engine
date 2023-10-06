@@ -117,6 +117,7 @@ interface NativeModuleExports {
   ade_dialogue_ctx_create_json(json_ptr: number, json_len: number, random_seed: bigint, err: number): number;
   ade_dialogue_ctx_destroy(dialogue_ctx: number): void;
   ade_dialogue_ctx_step(dialogue_ctx: number, result_slot: number): void;
+  ade_dialogue_ctx_reset(dialogue_ctx: number): void;
 }
 
 let _nativeModulePromise: Promise<WasmHelper<NativeModuleExports>> | undefined;
@@ -164,10 +165,10 @@ export async function makeDialogueContext(json: string): Promise<DialogueContext
       return DialogueContext.StepResult.unmarshal(nativeLib, getStepResultView());
     },
     reset() {
-      throw Error("unimplemented");
+      nativeLib._instance.exports.ade_dialogue_ctx_reset(nativeDlgCtx);
     },
     reply(replyId: number) {
-      throw Error("unimplemented");
+      nativeLib._instance.exports.ade_dialogue_ctx_reply(nativeDlgCtx);
     },
     dispose() {
       nativeLib._instance.exports.free(stepResultPtr, DialogueContext.StepResult.byteSize);

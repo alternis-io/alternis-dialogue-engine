@@ -63,7 +63,18 @@ export fn ade_dialogue_ctx_destroy(dialogue_ctx: ?*Api.DialogueContext) void {
     }
 }
 
-// FIXME: extern'ing slices (this way) is ugly..
+export fn ade_dialogue_ctx_reset(dialogue_ctx: ?*Api.DialogueContext) void {
+    if (dialogue_ctx) |ptr| {
+        ptr.reset();
+    }
+}
+
+export fn ade_dialogue_ctx_reply(dialogue_ctx: ?*Api.DialogueContext, replyId: usize) void {
+    if (dialogue_ctx) |ptr| {
+        ptr.reply(replyId);
+    }
+}
+
 const Line = extern struct {
     speaker: Slice(u8),
     text: Slice(u8),
@@ -82,6 +93,7 @@ const StepResult = extern struct {
     data: extern union {
         none: void,
         options: extern struct {
+            // FIXME: extern'ing slices (this way) is ugly..
             texts: Slice(Slice(u8)),
         },
         line: Line,
