@@ -94,7 +94,7 @@ test "create context without allocator set fails" {
 }
 
 test "c_api smoke test" {
-    ade_set_alloc(std.c.malloc, std.c.free);
+    setZigAlloc(std.testing.allocator);
 
     var ctx = ade_dialogue_ctx_create_json(Api.small_test_json.ptr, Api.small_test_json.len);
     try t.expect(ctx != null);
