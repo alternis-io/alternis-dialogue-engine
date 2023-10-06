@@ -170,7 +170,7 @@ pub const DialogueContext = struct {
 
     const seed = opts.random_seed orelse _: {
       if (builtin.os.tag == .freestanding) {
-        r = Result(DialogueContext).fmt_err("automatic seed not supported on this platform", .{});
+        r = Result(DialogueContext).fmt_err_src(alloc, "automatic seed not supported on this platform", .{}, @src());
         return r;
       }
 

@@ -47,13 +47,24 @@ fn ResultDecls(comptime R: type, comptime E: type, comptime Self: type) type {
 
 
     pub fn fmt_err(alloc: std.mem.Allocator, comptime fmt_str: []const u8, fmt_args: anytype) Self {
-      const src = std.debug.getSelfDebugInfo() catch unreachable;
+      // FIXME: doesn't work on wasm yet anyway
+      const src = @src(); //std.debug.getSelfDebugInfo() catch unreachable;
       return Self{
         .value = undefined,
         .err = std.fmt.allocPrintZ(
           alloc, "Error at {s}:{}:" ++ fmt_str, .{src.file, src.line} ++ fmt_args
         ) catch |sub_err|
           std.debug.panic("error '{}' while explaining an error", .{sub_err}),
+        .errCode = fmtStringId(fmt_str),
+      };
+    }
+
+
+    // this is if we need caller information on platforms that don't support finding it
+    pub fn fmt_err_src(alloc: std.mem.Allocator, comptime fmt_str: []const u8, fmt_args: anytype, src: std.builtin.SourceLocation) Self {
+      return Self{
+        .value = undefined,
+        .err = std.fmt.allocPrintZ(alloc, "Error at {s}:{}\n" ++ fmt_str, .{src.file, src.line} ++ fmt_args) catch |sub_err| std.debug.panic("error '{}' while explaining an error", .{sub_err}),
         .errCode = fmtStringId(fmt_str),
       };
     }
