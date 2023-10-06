@@ -8,8 +8,10 @@
     "lib": ["DOM", "ScriptHost", "ES2020"],
     "strict": true,
     "skipLibCheck": true,
-    "types": ["@types/mocha", "@types/node"],
+    "types": ["@types/mocha", "@types/node", "vite/client.d.ts"],
+    "allowImportingTsExtensions": true,
     "esModuleInterop": true
+
   },
   "include": ["**/*.ts"]
 }

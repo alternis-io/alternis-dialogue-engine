@@ -1,4 +1,4 @@
-import { WasmHelper, makeWasmHelper } from "./wasm";
+import { WasmHelper, makeWasmHelper, unmarshalString } from "./wasm";
 
 export namespace DialogueContext {
   export interface Line {
@@ -95,7 +95,7 @@ export interface DialogueContext {
 }
 
 interface NativeModuleExports {
-  ade_dialogue_ctx_create_json(json_ptr: number, json_len: number): number;
+  ade_dialogue_ctx_create_json(json_ptr: number, json_len: number, err: number): number;
   ade_dialogue_ctx_destroy(dialogue_ctx: number): void;
   ade_dialogue_ctx_step(dialogue_ctx: number, result_slot: number): void;
 }
@@ -104,8 +104,17 @@ let _nativeModulePromise: Promise<WasmHelper<NativeModuleExports>> | undefined;
 
 import initWasm from "../node_modules/alternis-wasm/zig-out/lib/alternis.wasm?init";
 
+let importsInstance!: WebAssembly.Instance;
+
 async function getNativeLib(): Promise<WasmHelper<NativeModuleExports>> {
-  return _nativeModulePromise ??= initWasm().then(inst => makeWasmHelper<NativeModuleExports>(inst));
+  return _nativeModulePromise ??= initWasm({
+    env: {
+      _debug_print(ptr: number, len: number) { console.log(unmarshalString(importsInstance as any, ptr, len).value); },
+    }
+  }).then(inst => {
+    importsInstance = inst;
+    return makeWasmHelper<NativeModuleExports>(inst)
+  });
 }
 
 /**
@@ -114,14 +123,26 @@ async function getNativeLib(): Promise<WasmHelper<NativeModuleExports>> {
 export async function makeDialogueContext(json: string): Promise<DialogueContext> {
   const nativeLib = await getNativeLib();
   const wasmJsonStr = nativeLib.marshalString(json);
+
+  const errSlot = nativeLib._instance.exports.malloc(4); // wasm32 ptr bytesize
+  // use a function to defer DataView creation since growth can invalidate the view
+  const getErrView = () => new DataView(nativeLib._instance.exports.memory.buffer, errSlot);
+  getErrView().setUint32(0, 0, true); // zero the memory
+
   const stepResultPtr = nativeLib._instance.exports.malloc(DialogueContext.StepResult.byteSize);
-  const stepResultView = new DataView(nativeLib._instance.exports.memory.buffer.slice(stepResultPtr));
-  const nativeDlgCtx = nativeLib._instance.exports.ade_dialogue_ctx_create_json(wasmJsonStr.ptr, wasmJsonStr.len);
+  const getStepResultView = () => new DataView(nativeLib._instance.exports.memory.buffer, stepResultPtr);
+
+  const nativeDlgCtx = nativeLib._instance.exports.ade_dialogue_ctx_create_json(wasmJsonStr.ptr, wasmJsonStr.len, errSlot);
+  const errPtr = getErrView().getUint32(0, true);
+  if (errPtr !== 0) {
+    const err = nativeLib.ptrToStr(errPtr);
+    throw Error(err.value);
+  }
 
   const result: DialogueContext = {
     step() {
       nativeLib._instance.exports.ade_dialogue_ctx_step(nativeDlgCtx, stepResultPtr);
-      return DialogueContext.StepResult.unmarshal(nativeLib, stepResultView);
+      return DialogueContext.StepResult.unmarshal(nativeLib, getStepResultView());
     },
     reset() {
       throw Error("unimplemented");

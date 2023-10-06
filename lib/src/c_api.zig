@@ -25,11 +25,14 @@ pub fn setZigAlloc(in_alloc: std.mem.Allocator) void {
     alloc = in_alloc;
 }
 
-export fn ade_dialogue_ctx_create_json(json_ptr: [*]const u8, json_len: usize) ?*Api.DialogueContext {
+export fn ade_dialogue_ctx_create_json(json_ptr: [*]const u8, json_len: usize, err: ?*?[*:0]const u8) ?*Api.DialogueContext {
     const ctx_result = Api.DialogueContext.initFromJson(json_ptr[0..json_len], alloc, .{});
-    // FIXME: log/set/return error somewhere!
-    if (ctx_result.is_err())
+
+    // FIXME: better return err (e.g. this leaks)
+    if (ctx_result.is_err() and err != null) {
+        err.?.* = ctx_result.err.?.ptr;
         return null;
+    }
 
     var ctx_slot = alloc.create(Api.DialogueContext)
         catch |e| std.debug.panic("alloc error: {}", .{e});

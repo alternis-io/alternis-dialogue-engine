@@ -21,8 +21,8 @@ export interface WasmStr {
 
 export function assertCompatibleWasmInstance(w: WebAssembly.Instance): asserts w is CompatibleWebAssemblyInstance {
   assert(w.exports.memory instanceof WebAssembly.Memory);
-  assert(typeof w.exports.alloc_string === "function");
-  assert(typeof w.exports.free_string === "function");
+  assert(typeof w.exports.malloc === "function");
+  assert(typeof w.exports.free === "function");
 }
 
 export interface WasmHelper<T extends Record<string, any> = {}> {
@@ -36,44 +36,49 @@ export interface WasmHelper<T extends Record<string, any> = {}> {
   unmarshalSlice(ptr: number, len: number, encoding?: string): WasmStr;
 }
 
+export function ptrToStr(inst: CompatibleWebAssemblyInstance, ptr: number, encoding?: string): WasmStr {
+  // FIXME: why not use a data view?
+  const slice = new Uint8Array(inst.exports.memory.buffer.slice(ptr));
+  let i = 0;
+  for (; i < slice.byteLength; ++i) {
+    if (slice[i] === 0) break;
+  }
+  return ptrAndLenToStr(inst, ptr, i - 1, encoding);
+}
+
+export function ptrAndLenToStr(inst: CompatibleWebAssemblyInstance, ptr: number, len: number, encoding = "utf8"): WasmStr {
+  const slice = inst.exports.memory.buffer.slice(ptr, ptr + len);
+  return {
+    value: new TextDecoder(encoding).decode(slice),
+    ptr,
+    len,
+    free(this: WasmStr) { inst.exports.free(this.ptr, this.len); },
+  };
+}
+
+export function marshalString(inst: CompatibleWebAssemblyInstance, str: string): WasmStr {
+  const strBytes = new TextEncoder().encode(str);
+  const allocPtr = inst.exports.malloc(strBytes.byteLength);
+  const allocSlice = new DataView(inst.exports.memory.buffer, allocPtr, strBytes.byteLength);
+  for (let i = 0; i < strBytes.byteLength; ++i) {
+    allocSlice.setUint8(i, strBytes[i]);
+  }
+  return ptrAndLenToStr(inst, allocPtr, strBytes.byteLength);
+}
+
+export function unmarshalString(inst: CompatibleWebAssemblyInstance, ptr: number, len: number, encoding = "utf8"): WasmStr {
+  return ptrAndLenToStr(inst, ptr, len, encoding);
+}
+
 export function makeWasmHelper<T extends Record<string, any> = {}>(wasmInst: WebAssembly.Instance): WasmHelper<T> {
   assertCompatibleWasmInstance(wasmInst);
 
   return {
     _instance: wasmInst as CompatibleWebAssemblyInstance & { exports: T },
-
-    ptrToStr(ptr: number, encoding?: string): WasmStr {
-      const slice = new Uint8Array(wasmInst.exports.memory.buffer.slice(ptr));
-      let i = 0;
-      for (; i < slice.byteLength; ++i) {
-        if (slice[i] === 0) break;
-      }
-      return this.ptrAndLenToStr(ptr, i - 1, encoding);
-    },
-
-    ptrAndLenToStr(ptr: number, len: number, encoding = "utf8"): WasmStr {
-      const slice = wasmInst.exports.memory.buffer.slice(ptr, ptr + len);
-      return {
-        value: new TextDecoder(encoding).decode(slice),
-        ptr,
-        len,
-        free(this: WasmStr) { wasmInst.exports.free(this.ptr, this.len); },
-      };
-    },
-
-    marshalString(str: string): WasmStr {
-      const strBytes = new TextEncoder().encode(str);
-      const allocPtr = wasmInst.exports.malloc(strBytes.byteLength);
-      const allocSlice = new DataView(wasmInst.exports.memory.buffer, allocPtr, strBytes.byteLength);
-      for (let i = 0; i < strBytes.byteLength; ++i) {
-        allocSlice.setUint8(i, strBytes[i]);
-      }
-      return this.ptrAndLenToStr(allocPtr, strBytes.byteLength);
-    },
-
-    unmarshalString(ptr: number, len: number, encoding = "utf8"): WasmStr {
-      return this.ptrAndLenToStr(ptr, len, encoding);
-    },
+    ptrToStr: (...args) => ptrToStr(wasmInst, ...args),
+    ptrAndLenToStr: (...args) => ptrAndLenToStr(wasmInst, ...args),
+    marshalString: (...args) => marshalString(wasmInst, ...args),
+    unmarshalString: (...args) => unmarshalString(wasmInst, ...args),
 
     marshalSlice(str: string): WasmStr {
       throw Error("unimplemented");

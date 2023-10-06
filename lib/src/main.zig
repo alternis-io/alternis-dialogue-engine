@@ -5,6 +5,14 @@ const t = std.testing;
 const Result = @import("./result.zig").Result;
 const Slice = @import("./slice.zig").Slice;
 
+
+// FIXME: only in wasm
+extern fn _debug_print([*]const u8, len: usize) void;
+
+fn debug_print(msg: []const u8) void {
+    _debug_print(msg.ptr, msg.len);
+}
+
 const Index = usize;
 
 /// basically packed ?u31
@@ -161,8 +169,10 @@ pub const DialogueContext = struct {
       catch |e| { r = Result(DialogueContext).fmt_err(alloc, "{}", .{e}); return r; };
 
     const seed = opts.random_seed orelse _: {
-      if (builtin.os.tag == .freestanding)
-        @panic("automatic seed not supported on this platform");
+      if (builtin.os.tag == .freestanding) {
+        r = Result(DialogueContext).fmt_err_src(alloc, "{s}", .{"automatic seed not supported on this platform"}, @src());
+        return r;
+      }
 
       var time: std.os.system.timespec = undefined;
       std.os.clock_gettime(std.os.CLOCK.REALTIME, &time)
