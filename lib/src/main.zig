@@ -270,7 +270,6 @@ pub const DialogueContext = struct {
   }
 };
 
-// FIXME: I think it would be more efficient to replace this with a custom json parsing routine
 const DialogueJsonFormat = struct {
   entryId: usize,
   nodes: []const struct {
@@ -278,6 +277,7 @@ const DialogueJsonFormat = struct {
 
     // FIXME: these must be in sync with the implementation of Node!
     // TODO: generate these from Node type...
+    // NOTE: this scales poorly of course, a custom json parser would be much better
     line: ?@typeInfo(Node).Union.fields[0].type = null,
     random_switch: ?struct {
       nexts: []const Next,
@@ -292,6 +292,33 @@ const DialogueJsonFormat = struct {
       if (self.line)          |v| return .{.line = v};
       if (self.random_switch) |v| return .{.random_switch = RandomSwitch.init(v.nexts, v.chances)};
       if (self.reply)         |v| return .{.reply = v};
+      if (self.lock)          |v| return .{.lock = v};
+      if (self.unlock)        |v| return .{.unlock = v};
+      if (self.call)          |v| return .{.call = v};
+      return null;
+    }
+
+    // FIXME: add a deep clone utility
+    // FIXME: maybe I should just copy/own the json document?
+    pub fn toNodeAlloc(self: @This(), alloc: std.mem.Allocator) !?Node {
+      if (self.line)          |v| return .{.line = .{
+        .data = .{
+          .speaker = try alloc.dupe(u8, v.data.speaker),
+          .text = try alloc.dupe(u8, v.data.text),
+          .metadata = try alloc.dupe(u8, v.data.metadata),
+        },
+        .next = v.next,
+      }};
+      if (self.random_switch) |v| return .{.random_switch = RandomSwitch.init(
+          try alloc.dupe(Next, v.nexts),
+          try alloc.dupe(u32, v.chances),
+        )};
+      if (self.reply) |v| {
+        return .{.reply = .{
+          .nexts = alloc.dupe(Next, v.nexts),
+          .texts = alloc.dupe(Slice(u8), v.texts),
+        }};
+      }
       if (self.lock)          |v| return .{.lock = v};
       if (self.unlock)        |v| return .{.unlock = v};
       if (self.call)          |v| return .{.call = v};

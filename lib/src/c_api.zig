@@ -3,6 +3,9 @@ const builtin = @import("builtin");
 const t = std.testing;
 
 extern fn _debug_print([*]const u8, len: usize) void;
+// fn _debug_print(ptr: [*]const u8, len: usize) void {
+//     std.debug.print("{s}\n", .{ptr[0..len]});
+// }
 
 const Api = @import("./main.zig");
 const Slice = @import("./slice.zig").Slice;
@@ -103,11 +106,6 @@ export fn ade_dialogue_ctx_step(dialogue_ctx: *Api.DialogueContext, result_loc: 
             .texts = Slice(Slice(u8)).fromZig(result.options.texts),
         } } },
     };
-
-    if (std.meta.activeTag(result) == .line) {
-        const speaker = result_loc.?.*.data.line.speaker;
-        _debug_print(speaker.ptr, speaker.len);
-    }
 }
 
 // for now this just invokes failing allocator and panics...
