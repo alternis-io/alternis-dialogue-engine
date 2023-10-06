@@ -105,7 +105,7 @@ let _nativeModulePromise: Promise<WasmHelper<NativeModuleExports>> | undefined;
 import initWasm from "../node_modules/alternis-wasm/zig-out/lib/alternis.wasm?init";
 
 async function getNativeLib(): Promise<WasmHelper<NativeModuleExports>> {
-  return _nativeModulePromise ??= initWasm.then(m => makeWasmHelper<NativeModuleExports>(m.instance));
+  return _nativeModulePromise ??= initWasm().then(inst => makeWasmHelper<NativeModuleExports>(inst));
 }
 
 /**

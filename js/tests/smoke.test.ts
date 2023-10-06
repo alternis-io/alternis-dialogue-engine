@@ -1,4 +1,4 @@
-import { makeDialogueContext } from "..";
+import { makeDialogueContext } from "../dist/alternis.js";
 import assert from "assert";
 
 // FIXME: load from alternis-wasm dependency
