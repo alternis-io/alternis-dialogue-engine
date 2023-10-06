@@ -132,11 +132,18 @@ pub const DialogueContext = struct {
 
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena.deinit();
+    // FIXME: badly used, need to dupe all json allocations
+    // (e.g. json with escapes will be invalid)
     // allocator for temporary allocations, for permanent ones, use the 'alloc' parameter
     const arena_alloc = arena.allocator();
 
+    // FIXME: leak, also cloning only the necessary strings will lower memory footprint,
+    // @see toNodeAlloc
+    const owned_json_text_copy = alloc.dupe(u8, json_text)
+      catch |e| { r = Result(DialogueContext).fmt_err(alloc, "{}", .{e}); return r; };
+
     var json_diagnostics = json.Diagnostics{};
-    var json_reader = json.Scanner.initCompleteInput(arena_alloc, json_text);
+    var json_reader = json.Scanner.initCompleteInput(arena_alloc, owned_json_text_copy);
     json_reader.enableDiagnostics(&json_diagnostics);
 
     const dialogue_data = json.parseFromTokenSourceLeaky(DialogueJsonFormat, arena_alloc, &json_reader, .{

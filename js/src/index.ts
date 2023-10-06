@@ -176,7 +176,7 @@ export async function makeDialogueContext(json: string): Promise<DialogueContext
   };
 
   // currently the string is moved into dialogue context
-  //wasmJsonStr.free();
+  wasmJsonStr.free();
 
   return result;
 }
