@@ -3,6 +3,7 @@ const builtin = @import("builtin");
 const json = std.json;
 const t = std.testing;
 const Result = @import("./result.zig").Result;
+const Slice = @import("./slice.zig").Slice;
 
 const Index = usize;
 
@@ -54,8 +55,8 @@ const Node = union (enum) {
   random_switch: RandomSwitch,
   reply: struct {
     nexts: []const Next, // does it make sense for these to be optional?
-    /// utf8 assumed
-    texts: []const u8,
+    /// utf8 assumed (uses externable type)
+    texts: []const Slice(u8),
   },
   lock: struct {
     booleanVariableIndex: Index,
@@ -103,7 +104,8 @@ pub const DialogueContext = struct {
   pub const StepResult = union (enum) {
     none,
     options: struct {
-      texts: []const u8,
+      // FIXME: not as easy to extern-ize
+      texts: []const Slice(u8),
     },
     line: Line,
   };

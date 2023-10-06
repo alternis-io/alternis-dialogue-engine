@@ -3,6 +3,8 @@ const builtin = @import("builtin");
 const t = std.testing;
 
 const Api = @import("./main.zig");
+const Slice = @import("./slice.zig").Slice;
+const OptSlice = @import("./slice.zig").OptSlice;
 
 const ConfigurableSimpleAlloc = @import("./simple_alloc.zig").ConfigurableSimpleAlloc;
 var configured_raw_alloc: ?ConfigurableSimpleAlloc = null;
@@ -43,12 +45,9 @@ export fn ade_dialogue_ctx_destroy(dialogue_ctx: ?*Api.DialogueContext) void {
 
 // FIXME: extern'ing slices (this way) is ugly..
 const Line = extern struct {
-    speaker_ptr: [*]const u8,
-    speaker_len: usize = 0,
-    text_ptr: [*]const u8,
-    text_len: usize = 0,
-    metadata: ?[*]const u8,
-    metadata_len: usize = 0,
+    speaker: Slice(u8),
+    text: Slice(u8),
+    metadata: OptSlice(u8),
 };
 
 const StepResult = extern struct {
@@ -63,34 +62,28 @@ const StepResult = extern struct {
     data: extern union {
         none: void,
         options: extern struct {
-            // FIXME: need a higher-level slice concept
-            texts: [*]const struct {
-                ptr: [*]const u8,
-                len: usize,
-            },
-            texts_len: usize,
+            texts: Slice(Slice(u8)),
         },
         line: Line,
     } = undefined,
 };
 
-export fn ade_dialogue_ctx_step(dialogue_ctx: *Api.DialogueContext) StepResult {
+export fn ade_dialogue_ctx_step(dialogue_ctx: *Api.DialogueContext, result_loc: ?*StepResult) void {
+    std.debug.assert(result_loc != null);
+
     const result = dialogue_ctx.step();
-    return switch (std.meta.activeTag(result)) {
+
+    result_loc.?.* = switch (std.meta.activeTag(result)) {
         // FIXME: surely there is a better way to do this? maybe using @tagName and inline else?
         //inline else => |_, tag| @tagName(tag),
         .none => .{ .tag = .none },
         .line => .{ .tag = .line, .data = .{ .line = .{
-            .speaker_ptr = result.line.speaker.ptr,
-            .speaker_len = result.line.speaker.len,
-            .text_ptr = result.line.text.ptr,
-            .text_len = result.line.text.len,
-            .metadata = if (result.line.metadata) |m| m.ptr else null,
-            .metadata_len = if (result.line.metadata) |m| m.len else 0,
+            .speaker = Slice(u8).fromZig(result.line.speaker),
+            .text = Slice(u8).fromZig(result.line.text),
+            .metadata = OptSlice(u8).fromZig(result.line.metadata),
         } } },
         .options => .{ .tag = .options, .data = .{ .options = .{
-            .texts = result.options.texts.ptr,
-            .texts_len = result.options.texts.len,
+            .texts = Slice(Slice(u8)).fromZig(result.options.texts),
         } } },
     };
 }
@@ -107,19 +100,20 @@ test "c_api smoke test" {
     try t.expect(ctx != null);
     defer ade_dialogue_ctx_destroy(ctx.?);
 
-    const step_result_1 = ade_dialogue_ctx_step(ctx.?);
-    try t.expect(step_result_1.tag == .line);
-    try t.expectEqualStrings("test", step_result_1.data.line.speaker_ptr[0..step_result_1.data.line.speaker_len]);
-    try t.expectEqualStrings("hello world!", step_result_1.data.line.text_ptr[0..step_result_1.data.line.text_len]);
+    var step_result: StepResult = undefined;
+    ade_dialogue_ctx_step(ctx.?, &step_result);
+    try t.expect(step_result.tag == .line);
+    try t.expectEqualStrings("test", step_result.data.line.speaker.toZig());
+    try t.expectEqualStrings("hello world!", step_result.data.line.text.toZig());
     try t.expectEqual(@as(?usize, 1), ctx.?.current_node_index);
 
-    const step_result_2 = ade_dialogue_ctx_step(ctx.?);
-    try t.expect(step_result_2.tag == .line);
-    try t.expectEqualStrings("test", step_result_2.data.line.speaker_ptr[0..step_result_2.data.line.speaker_len]);
-    try t.expectEqualStrings("goodbye cruel world!", step_result_2.data.line.text_ptr[0..step_result_2.data.line.text_len]);
+    ade_dialogue_ctx_step(ctx.?, &step_result);
+    try t.expect(step_result.tag == .line);
+    try t.expectEqualStrings("test", step_result.data.line.speaker.toZig());
+    try t.expectEqualStrings("goodbye cruel world!", step_result.data.line.text.toZig());
     try t.expectEqual(@as(?usize, null), ctx.?.current_node_index);
 
-    const step_result_3 = ade_dialogue_ctx_step(ctx.?);
-    try t.expect(step_result_3.tag == .none);
+    ade_dialogue_ctx_step(ctx.?, &step_result);
+    try t.expect(step_result.tag == .none);
     try t.expectEqual(@as(?usize, null), ctx.?.current_node_index);
 }

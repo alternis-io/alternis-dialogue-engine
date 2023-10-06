@@ -2,16 +2,15 @@ const std = @import("std");
 const builtin = @import("builtin");
 const c_api = @import("./c_api.zig");
 
-export fn alloc_string(byte_count: usize) [*:0]u8 {
+export fn malloc(len: usize) [*]u8 {
     return (
-        std.heap.wasm_allocator.allocSentinel(u8, byte_count, 0)
+        std.heap.wasm_allocator.alloc(u8, len)
             catch |e| return std.debug.panic("alloc error: {}", .{e})
     ).ptr;
 }
 
-export fn free_string(str: [*:0]u8) void {
-    // FIXME: remove wasteful length check
-    return std.heap.wasm_allocator.free(str[0..std.mem.len(str)]);
+export fn free(ptr: [*]u8, len: usize) void {
+    return std.heap.wasm_allocator.free(ptr[0..len]);
 }
 
 // FIXME: eventually a comptime block will allow forcing exports to go through
