@@ -8,7 +8,7 @@ export default defineConfig(({ mode }) => ({
     dts({ insertTypesEntry: true }),
   ],
   build: {
-    minify: mode === "production",
+    minify: false,
     lib: {
       entry: resolve(__dirname, 'src/index.ts'),
       name: 'Alternis',
