@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "outDir": "lib",
+    "declaration": true,
+    "target": "es2020",
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "lib": ["DOM", "ScriptHost", "ES2020"],
+    "strict": true,
+    "skipLibCheck": true,
+    "types": ["@types/mocha"]
+  },
+  "include": ["**/*.ts"]
+}

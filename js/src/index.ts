@@ -26,6 +26,8 @@ export namespace DialogueContext {
           : undefined,
       };
     }
+
+    export const byteSize = 24;
   }
 
   export interface Option {
@@ -62,7 +64,6 @@ export namespace DialogueContext {
         const textsView = new DataView(helper._instance.exports.memory.buffer, texts_ptr, byteSizeOfText * texts_len);
 
         for (let i = 0; i < texts_len; ++i) {
-          helper._instance.exports.memory.buffer
           const text_ptr = textsView.getUint32(i * byteSizeOfText, true);
           const text_len = textsView.getUint32(i * byteSizeOfText + 4, true);
           options.push({
@@ -79,6 +80,9 @@ export namespace DialogueContext {
 
       throw Error("unreachable; unknown tag while unmarshalling StepResult")
     }
+
+    // FIXME: assumes Line is the largest union member
+    export const byteSize = 4 + Line.byteSize;
   }
 }
 
@@ -93,7 +97,7 @@ export interface DialogueContext {
 interface NativeModuleExports {
   ade_dialogue_ctx_create_json(json_ptr: number, json_len: number): number;
   ade_dialogue_ctx_destroy(dialogue_ctx: number): void;
-  ade_dialogue_ctx_step(dialogue_ctx: number): void;
+  ade_dialogue_ctx_step(dialogue_ctx: number, result_slot: number): void;
 }
 
 let _nativeModulePromise: Promise<WasmHelper<NativeModuleExports>> | undefined;
@@ -112,19 +116,23 @@ async function getNativeLib(): Promise<WasmHelper<NativeModuleExports>> {
 export async function makeDialogueContext(json: string): Promise<DialogueContext> {
   const nativeLib = await getNativeLib();
   const wasmJsonStr = nativeLib.marshalString(json);
+  const stepResultPtr = nativeLib._instance.exports.malloc(DialogueContext.StepResult.byteSize);
+  const stepResultView = new DataView(nativeLib._instance.exports.memory.buffer.slice(stepResultPtr));
   const nativeDlgCtx = nativeLib._instance.exports.ade_dialogue_ctx_create_json(wasmJsonStr.ptr, wasmJsonStr.len);
 
   const result: DialogueContext = {
     step() {
-      const stepResult = nativeLib._instance.exports.ade_dialogue_ctx_step(nativeDlgCtx);
+      nativeLib._instance.exports.ade_dialogue_ctx_step(nativeDlgCtx, stepResultPtr);
+      return DialogueContext.StepResult.unmarshal(nativeLib, stepResultView);
     },
     reset() {
-
+      throw Error("unimplemented");
     },
     reply(replyId: number) {
-
+      throw Error("unimplemented");
     },
     dispose() {
+      nativeLib._instance.exports.free(stepResultPtr, DialogueContext.StepResult.byteSize);
       nativeLib._instance.exports.ade_dialogue_ctx_destroy(nativeDlgCtx);
     },
   };

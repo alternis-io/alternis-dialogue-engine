@@ -2,11 +2,13 @@ function assert(condition: any, message?: string): asserts condition {
   if (!condition) throw Error(message ?? "AssertionError: condition was falsey");
 }
 
+type Pointer = number;
+
 export type CompatibleWebAssemblyInstance = WebAssembly.Instance & {
   exports: {
     memory: WebAssembly.Memory;
-    alloc_string(byte_count: number): number;
-    free_string(ptr: number): void;
+    malloc(byte_count: number): Pointer;
+    free(ptr: Pointer, len: number): void;
   }
 }
 
@@ -29,6 +31,9 @@ export interface WasmHelper<T extends Record<string, any> = {}> {
   ptrToStr(ptr: number, encoding?: string): WasmStr;
   ptrAndLenToStr(ptr: number, len: number, encoding?: string): WasmStr;
   unmarshalString(ptr: number, len: number, encoding?: string): WasmStr;
+
+  marshalSlice(str: string): WasmStr;
+  unmarshalSlice(ptr: number, len: number, encoding?: string): WasmStr;
 }
 
 export function makeWasmHelper<T extends Record<string, any> = {}>(wasmInst: WebAssembly.Instance): WasmHelper<T> {
@@ -52,13 +57,13 @@ export function makeWasmHelper<T extends Record<string, any> = {}>(wasmInst: Web
         value: new TextDecoder(encoding).decode(slice),
         ptr,
         len,
-        free(this: WasmStr) { wasmInst.exports.free_string(this.ptr); },
+        free(this: WasmStr) { wasmInst.exports.free(this.ptr, this.len); },
       };
     },
 
     marshalString(str: string): WasmStr {
       const strBytes = new TextEncoder().encode(str);
-      const allocPtr = wasmInst.exports.alloc_string(strBytes.byteLength);
+      const allocPtr = wasmInst.exports.malloc(strBytes.byteLength);
       const allocSlice = new DataView(wasmInst.exports.memory.buffer, allocPtr, strBytes.byteLength);
       for (let i = 0; i < strBytes.byteLength; ++i) {
         allocSlice.setUint8(i, strBytes[i]);
@@ -68,6 +73,14 @@ export function makeWasmHelper<T extends Record<string, any> = {}>(wasmInst: Web
 
     unmarshalString(ptr: number, len: number, encoding = "utf8"): WasmStr {
       return this.ptrAndLenToStr(ptr, len, encoding);
+    },
+
+    marshalSlice(str: string): WasmStr {
+      throw Error("unimplemented");
+    },
+
+    unmarshalSlice(ptr: number, len: number, encoding = "utf8"): WasmStr {
+      throw Error("unimplemented");
     }
   }
 }
