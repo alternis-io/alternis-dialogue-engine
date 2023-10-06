@@ -4,6 +4,7 @@
   "version": "0.0.0",
   "description": "alternis dialogue engine workspace for JavaScript components",
   "scripts": {
+    "build": "pnpm -r build",
     "dev": "pnpm -r dev",
     "test": "pnpm -r test"
   },

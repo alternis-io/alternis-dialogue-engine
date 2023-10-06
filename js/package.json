@@ -2,8 +2,8 @@
   "name": "alternis-js",
   "version": "0.1.0",
   "description": "javascript bindings for the wasm version of the alternis dialogue engine",
-  "main": "dist/alternis.js",
-  "module": "dist/alternis.mjs",
+  "main": "dist/alternis.umd.cjs",
+  "module": "dist/alternis.js",
   "typings": "dist/alternis.d.ts",
   "type": "module",
   "files": [
