@@ -2,7 +2,16 @@
   "name": "alternis-js",
   "version": "0.1.0",
   "description": "javascript bindings for the wasm version of the alternis dialogue engine",
-  "main": "lib/index.js",
+  "main": "dist/alternis.js",
+  "module": "dist/alternis.mjs",
+  "type": "module",
+  "files": ["dist", "package.json"],
+  "exports": {
+    ".": {
+      "require": "./dist/alternis.umd.cjs",
+      "import": "./dist/alternis.js"
+    }
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build --mode production",
