@@ -52,7 +52,7 @@ fn ResultDecls(comptime R: type, comptime E: type, comptime Self: type) type {
       return Self{
         .value = undefined,
         .err = std.fmt.allocPrintZ(
-          alloc, "Error at {s}:{}:" ++ fmt_str, .{src.file, src.line} ++ fmt_args
+          alloc, "Error at {s}:{}:\n" ++ fmt_str, .{src.file, src.line} ++ fmt_args
         ) catch |sub_err|
           std.debug.panic("error '{}' while explaining an error", .{sub_err}),
         .errCode = fmtStringId(fmt_str),

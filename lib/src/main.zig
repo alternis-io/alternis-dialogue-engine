@@ -154,6 +154,11 @@ pub const DialogueContext = struct {
       .ignore_unknown_fields = true,
     }) catch |e| { r = Result(DialogueContext).fmt_err(alloc, "{}: {}", .{e, json_diagnostics}); return r; };
 
+    if (dialogue_data.version != 1) {
+        r = Result(DialogueContext).fmt_err(alloc, "unknown file version. Only version '1' is supported by this engine", .{});
+        return r;
+    }
+
     var nodes = std.MultiArrayList(Node){};
     defer if (r.is_err()) nodes.deinit(alloc);
     nodes.ensureTotalCapacity(alloc, dialogue_data.nodes.len)
@@ -169,13 +174,13 @@ pub const DialogueContext = struct {
           inline .reply, .random_switch => |v| {
             for (v.nexts) |maybe_next| {
               if (maybe_next.toOptionalInt(usize)) |next| if (next >= dialogue_data.nodes.len) {
-                r = Result(DialogueContext).err("bad index");
+                r = Result(DialogueContext).fmt_err(alloc, "bad next node '{}' on node '{}'", .{next, json_node.id});
                 return r;
               };
             }
           },
           inline else => |n| if (n.next.toOptionalInt(usize)) |next| if (next >= dialogue_data.nodes.len) {
-            r = Result(DialogueContext).err("bad index");
+            r = Result(DialogueContext).fmt_err(alloc, "bad next node '{}' on node '{}'", .{next, json_node.id});
             return r;
           },
         }
