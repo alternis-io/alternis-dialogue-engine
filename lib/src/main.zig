@@ -93,6 +93,7 @@ const VariableType = enum {
 };
 
 pub const DialogueContext = struct {
+  TEMP_json_copy: []const u8,
   nodes: std.MultiArrayList(Node),
   functions: []const ?Callback,
   variables: struct {
@@ -138,7 +139,7 @@ pub const DialogueContext = struct {
     // allocator for temporary allocations, for permanent ones, use the 'alloc' parameter
     const arena_alloc = arena.allocator();
 
-    // FIXME: leak, also cloning only the necessary strings will lower memory footprint,
+    // FIXME: cloning only the necessary strings will lower memory footprint,
     // @see toNodeAlloc
     const owned_json_text_copy = alloc.dupe(u8, json_text)
       catch |e| { r = Result(DialogueContext).fmt_err(alloc, "{}", .{e}); return r; };
@@ -215,6 +216,7 @@ pub const DialogueContext = struct {
       .current_node_index = dialogue_data.entryId,
       .entry_node_index = dialogue_data.entryId,
       .rand = std.rand.DefaultPrng.init(seed),
+      .TEMP_json_copy = owned_json_text_copy,
     });
 
     return r;
@@ -229,6 +231,7 @@ pub const DialogueContext = struct {
     alloc.free(self.functions);
     alloc.free(self.variables.strings);
     self.variables.booleans.deinit();
+    alloc.free(self.TEMP_json_copy);
   }
 
   pub fn reset(self: *@This()) void {
@@ -291,7 +294,7 @@ pub const DialogueContext = struct {
 };
 
 const DialogueJsonFormat = struct {
-  version: ?usize,
+  //version: ?usize,
   entryId: usize,
   nodes: []const struct {
     id: usize,
