@@ -1,0 +1,117 @@
+{
+  "version": 1,
+  "entryId": 2,
+  "nodes": [
+    {
+      "id": 2,
+      "line": {
+        "data": {
+          "speaker": "Aisha",
+          "text": "Hey"
+        },
+        "next": 3
+      }
+    },
+    {
+      "id": 3,
+      "random_switch": {
+        "nexts": [
+          4,
+          5
+        ],
+        "chances": [
+          1,
+          9
+        ]
+      }
+    },
+    {
+      "id": 4,
+      "line": {
+        "data": {
+          "speaker": "Aaron",
+          "text": "WELL HELLO"
+        },
+        "next": 9
+      }
+    },
+    {
+      "id": 5,
+      "line": {
+        "data": {
+          "speaker": "Aaron",
+          "text": "Yo"
+        },
+        "next": 9
+      }
+    },
+    {
+      "id": 6,
+      "reply": {
+        "nexts": [
+          8,
+          11,
+          12
+        ],
+        "texts": [
+          "It's {name} and I like waffles",
+          "It's {name}",
+          "Wanna go eat waffles?"
+        ]
+      }
+    },
+    {
+      "id": 8,
+      "unlock": {
+        "booleanVariableIndex": 0,
+        "next": 10
+      }
+    },
+    {
+      "id": 9,
+      "line": {
+        "data": {
+          "speaker": "Aaron",
+          "text": "What's your name?"
+        },
+        "next": 13
+      }
+    },
+    {
+      "id": 10,
+      "line": {
+        "data": {
+          "speaker": "Aaron",
+          "text": "You're pretty cool!\nWhat was your name again?"
+        },
+        "next": 7
+      }
+    },
+    {
+      "id": 11,
+      "line": {
+        "data": {
+          "speaker": "Aaron",
+          "text": "Ok. What was your name again?"
+        },
+        "next": 7
+      }
+    },
+    {
+      "id": 12,
+      "line": {
+        "data": {
+          "speaker": "Aaron",
+          "text": "Yeah, {name}."
+        }
+      }
+    },
+    {
+      "id": 13,
+      "call": {
+        "functionIndex": 0,
+        "next": 6
+      }
+    }
+  ]
+}

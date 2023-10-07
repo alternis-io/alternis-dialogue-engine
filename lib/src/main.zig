@@ -4,6 +4,7 @@ const json = std.json;
 const t = std.testing;
 const Result = @import("./result.zig").Result;
 const Slice = @import("./slice.zig").Slice;
+const FileBuffer = @import("./FileBuffer.zig");
 
 
 // FIXME: only in wasm
@@ -160,6 +161,21 @@ pub const DialogueContext = struct {
       if (maybe_node) |node| {
         nodes.append(alloc, node)
           catch |e| { r = Result(DialogueContext).fmt_err(alloc, "{}", .{e}); return r; };
+
+        switch (node) {
+          inline .reply, .random_switch => |v| {
+            for (v.nexts) |maybe_next| {
+              if (maybe_next.toOptionalInt(usize)) |next| if (next >= dialogue_data.nodes.len) {
+                r = Result(DialogueContext).err("bad index");
+                return r;
+              };
+            }
+          },
+          inline else => |n| if (n.next.toOptionalInt(usize)) |next| if (next >= dialogue_data.nodes.len) {
+            r = Result(DialogueContext).err("bad index");
+            return r;
+          },
+        }
       } else {
         r = Result(DialogueContext).fmt_err(alloc, "{s}", .{"invalid node without type or data"});
         return r;
@@ -275,6 +291,7 @@ pub const DialogueContext = struct {
 };
 
 const DialogueJsonFormat = struct {
+  version: ?usize,
   entryId: usize,
   nodes: []const struct {
     id: usize,
@@ -328,6 +345,23 @@ const DialogueJsonFormat = struct {
       if (self.call)          |v| return .{.call = v};
       return null;
     }
+  },
+  functions: []const struct {
+    name: []const u8
+  } = &.{},
+  participants: []const struct {
+    name: []const u8
+  } = &.{},
+  variables: struct {
+    boolean: []const struct {
+      name: []const u8,
+    } = &.{},
+    string: []const struct {
+      name: []const u8,
+    } = &.{}
+  } = .{
+    .boolean = &.{},
+    .string = &.{},
   },
 };
 
@@ -389,4 +423,23 @@ test "create and run context to completion" {
   const step_result_3 = ctx.step();
   try t.expect(step_result_3 == .none);
   try t.expectEqual(@as(?usize, null), ctx.current_node_index);
+}
+
+test "run sample large context" {
+  const alloc = std.testing.allocator;
+  const source = try FileBuffer.fromDirAndPath(alloc, std.fs.cwd(), "./test/assets/sample1.alternis.json");
+  defer source.free(alloc);
+
+  var ctx_result = DialogueContext.initFromJson(small_test_json, t.allocator , .{});
+
+  defer if (ctx_result.is_ok()) ctx_result.value.deinit(t.allocator)
+    // FIXME: need to add freeing logic to Result
+    else t.allocator.free(@constCast(ctx_result.err.?));
+
+  if (ctx_result.is_err())
+    std.debug.print("\nerr: '{s}'", .{ctx_result.err.?});
+  try t.expect(ctx_result.is_ok());
+
+  var ctx = ctx_result.value;
+  try t.expectEqual(@as(?usize, 0), ctx.current_node_index);
 }
