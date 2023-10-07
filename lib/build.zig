@@ -12,12 +12,15 @@ pub fn build(b: *std.Build) void {
     });
     b.installArtifact(lib);
 
+    const test_filter = b.option([]const u8, "test-filter", "filter for test subcommand");
+
     // Creates a step for unit testing. This only builds the test executable
     // but does not run it.
     const main_tests = b.addTest(.{
         .root_source_file = .{ .path = "src/c_api.zig" },
         .target = target,
         .optimize = optimize,
+        .filter = test_filter
     });
     main_tests.linkLibC(); // tests use libc malloc as the user configured allocator
 

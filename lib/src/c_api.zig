@@ -10,6 +10,7 @@ extern fn _debug_print([*]const u8, len: usize) void;
 const Api = @import("./main.zig");
 const Slice = @import("./slice.zig").Slice;
 const OptSlice = @import("./slice.zig").OptSlice;
+const FileBuffer = @import("./FileBuffer.zig");
 
 const ConfigurableSimpleAlloc = @import("./simple_alloc.zig").ConfigurableSimpleAlloc;
 var configured_raw_alloc: ?ConfigurableSimpleAlloc = null;
@@ -126,12 +127,14 @@ export fn ade_dialogue_ctx_step(dialogue_ctx: *Api.DialogueContext, result_loc: 
 //     try t.expectEqual(@as(?*Api.DialogueContext, null), ade_dialogue_ctx_create_json(dialogue.ptr, dialogue.len));
 // }
 
-test "c_api smoke test" {
-    setZigAlloc(std.testing.allocator);
+// FIXME: source json from same file as main.zig tests
+test "run small dialogue under c api" {
+    setZigAlloc(t.allocator);
 
-    var ctx = ade_dialogue_ctx_create_json(
-        Api.small_test_json.ptr, Api.small_test_json.len, 0, null
-    );
+    const src = try FileBuffer.fromDirAndPath(t.allocator, std.fs.cwd(), "./test/assets/simple1.alternis.json");
+    defer src.free(t.allocator);
+
+    var ctx = ade_dialogue_ctx_create_json(src.buffer.ptr, src.buffer.len, 0, null);
     try t.expect(ctx != null);
     defer ade_dialogue_ctx_destroy(ctx.?);
 

@@ -93,7 +93,9 @@ const VariableType = enum {
 };
 
 pub const DialogueContext = struct {
+  // FIXME: don't copy the input json, deep copy the relevant results
   TEMP_json_copy: []const u8,
+
   nodes: std.MultiArrayList(Node),
   functions: []const ?Callback,
   variables: struct {
@@ -294,7 +296,7 @@ pub const DialogueContext = struct {
 };
 
 const DialogueJsonFormat = struct {
-  //version: ?usize,
+  version: usize,
   entryId: usize,
   nodes: []const struct {
     id: usize,
@@ -368,36 +370,11 @@ const DialogueJsonFormat = struct {
   },
 };
 
-pub const small_test_json =
-    \\{
-    \\  "entryId": 0,
-    \\  "nodes": [
-    \\    {
-    \\      "id": 0,
-    \\      "line": {
-    \\        "data": {
-    \\          "speaker": "test",
-    \\          "text": "hello world!"
-    \\        },
-    \\        "next": 1
-    \\      }
-    \\    },
-    \\    {
-    \\      "id": 1,
-    \\      "line": {
-    \\        "data": {
-    \\          "speaker": "test",
-    \\          "text": "goodbye cruel world!"
-    \\        }
-    \\      }
-    \\    }
-    \\  ]
-    \\}
-;
+test "run small dialogue under zig api" {
+  const src = try FileBuffer.fromDirAndPath(t.allocator, std.fs.cwd(), "./test/assets/simple1.alternis.json");
+  defer src.free(t.allocator);
 
-test "create and run context to completion" {
-  // FIXME: load a larger one from tests dir
-  var ctx_result = DialogueContext.initFromJson(small_test_json, t.allocator , .{});
+  var ctx_result = DialogueContext.initFromJson(src.buffer, t.allocator , .{});
 
   defer if (ctx_result.is_ok()) ctx_result.value.deinit(t.allocator)
     // FIXME: need to add freeing logic to Result
@@ -428,12 +405,11 @@ test "create and run context to completion" {
   try t.expectEqual(@as(?usize, null), ctx.current_node_index);
 }
 
-test "run sample large context" {
-  const alloc = std.testing.allocator;
-  const source = try FileBuffer.fromDirAndPath(alloc, std.fs.cwd(), "./test/assets/sample1.alternis.json");
-  defer source.free(alloc);
+test "run large dialogue under zig api" {
+  const src = try FileBuffer.fromDirAndPath(t.allocator, std.fs.cwd(), "./test/assets/sample1.alternis.json");
+  defer src.free(t.allocator);
 
-  var ctx_result = DialogueContext.initFromJson(small_test_json, t.allocator , .{});
+  var ctx_result = DialogueContext.initFromJson(src.buffer, t.allocator , .{});
 
   defer if (ctx_result.is_ok()) ctx_result.value.deinit(t.allocator)
     // FIXME: need to add freeing logic to Result

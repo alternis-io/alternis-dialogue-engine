@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "entryId": 0,
+  "nodes": [
+    {
+      "id": 0,
+      "line": {
+        "data": {
+          "speaker": "test",
+          "text": "hello world!"
+        },
+        "next": 1
+      }
+    },
+    {
+      "id": 1,
+      "line": {
+        "data": {
+          "speaker": "test",
+          "text": "goodbye cruel world!"
+        }
+      }
+    }
+  ]
+}
