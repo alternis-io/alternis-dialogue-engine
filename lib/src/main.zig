@@ -147,6 +147,7 @@ pub const DialogueContext = struct {
     // @see toNodeAlloc
     const owned_json_text_copy = alloc.dupe(u8, json_text)
       catch |e| { r = Result(DialogueContext).fmt_err(alloc, "{}", .{e}); return r; };
+    defer if (r.is_err()) alloc.free(owned_json_text_copy);
 
     var json_diagnostics = json.Diagnostics{};
     var json_reader = json.Scanner.initCompleteInput(arena_alloc, owned_json_text_copy);

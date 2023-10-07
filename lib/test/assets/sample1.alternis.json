@@ -1,23 +1,23 @@
 {
   "version": 1,
-  "entryId": 1,
+  "entryId": 0,
   "nodes": [
     {
-      "id": 1,
+      "id": 0,
       "line": {
         "data": {
           "speaker": "Aisha",
           "text": "Hey"
         },
-        "next": 2
+        "next": 1
       }
     },
     {
-      "id": 2,
+      "id": 1,
       "random_switch": {
         "nexts": [
           null,
-          4
+          3
         ],
         "chances": [
           1,
@@ -26,31 +26,29 @@
       }
     },
     {
-      "id": 3,
+      "id": 2,
       "line": {
         "data": {
           "speaker": "Aaron",
           "text": "WELL HELLO"
-        },
-        "next": 8
-      }
-    },
-    {
-      "id": 4,
-      "line": {
-        "data": {
-          "speaker": "Aaron",
-          "text": "Yo"
         }
       }
     },
     {
-      "id": 5,
+      "id": 3,
+      "line": {
+        "data": {
+          "speaker": "Aaron",
+          "text": "Yo"
+        },
+        "next": 7
+      }
+    },
+    {
+      "id": 4,
       "reply": {
         "nexts": [
-          null,
-          null,
-          11
+          7
         ],
         "texts": [
           "It's {name} and I like waffles",
@@ -60,14 +58,14 @@
       }
     },
     {
-      "id": 7,
+      "id": 6,
       "unlock": {
         "booleanVariableIndex": 0,
-        "next": 9
+        "next": 8
       }
     },
     {
-      "id": 8,
+      "id": 7,
       "line": {
         "data": {
           "speaker": "Aaron",
@@ -76,27 +74,27 @@
       }
     },
     {
-      "id": 9,
+      "id": 8,
       "line": {
         "data": {
           "speaker": "Aaron",
           "text": "You're pretty cool!\nWhat was your name again?"
         },
-        "next": 12
+        "next": 5
       }
     },
     {
-      "id": 10,
+      "id": 9,
       "line": {
         "data": {
           "speaker": "Aaron",
           "text": "Ok. What was your name again?"
         },
-        "next": 6
+        "next": 11
       }
     },
     {
-      "id": 11,
+      "id": 10,
       "line": {
         "data": {
           "speaker": "Aaron",
@@ -105,10 +103,10 @@
       }
     },
     {
-      "id": 12,
+      "id": 11,
       "call": {
         "functionIndex": 0,
-        "next": 5
+        "next": 4
       }
     }
   ]
