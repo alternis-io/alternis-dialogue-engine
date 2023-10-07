@@ -1,23 +1,23 @@
 {
   "version": 1,
-  "entryId": 2,
+  "entryId": 1,
   "nodes": [
     {
-      "id": 2,
+      "id": 1,
       "line": {
         "data": {
           "speaker": "Aisha",
           "text": "Hey"
         },
-        "next": 3
+        "next": 2
       }
     },
     {
-      "id": 3,
+      "id": 2,
       "random_switch": {
         "nexts": [
-          4,
-          5
+          null,
+          4
         ],
         "chances": [
           1,
@@ -26,32 +26,31 @@
       }
     },
     {
-      "id": 4,
+      "id": 3,
       "line": {
         "data": {
           "speaker": "Aaron",
           "text": "WELL HELLO"
         },
-        "next": 9
+        "next": 8
       }
     },
     {
-      "id": 5,
+      "id": 4,
       "line": {
         "data": {
           "speaker": "Aaron",
           "text": "Yo"
-        },
-        "next": 9
+        }
       }
     },
     {
-      "id": 6,
+      "id": 5,
       "reply": {
         "nexts": [
-          8,
-          11,
-          12
+          null,
+          null,
+          11
         ],
         "texts": [
           "It's {name} and I like waffles",
@@ -61,10 +60,19 @@
       }
     },
     {
-      "id": 8,
+      "id": 7,
       "unlock": {
         "booleanVariableIndex": 0,
-        "next": 10
+        "next": 9
+      }
+    },
+    {
+      "id": 8,
+      "line": {
+        "data": {
+          "speaker": "Aaron",
+          "text": "What's your name?"
+        }
       }
     },
     {
@@ -72,9 +80,9 @@
       "line": {
         "data": {
           "speaker": "Aaron",
-          "text": "What's your name?"
+          "text": "You're pretty cool!\nWhat was your name again?"
         },
-        "next": 13
+        "next": 12
       }
     },
     {
@@ -82,23 +90,13 @@
       "line": {
         "data": {
           "speaker": "Aaron",
-          "text": "You're pretty cool!\nWhat was your name again?"
+          "text": "Ok. What was your name again?"
         },
-        "next": 7
+        "next": 6
       }
     },
     {
       "id": 11,
-      "line": {
-        "data": {
-          "speaker": "Aaron",
-          "text": "Ok. What was your name again?"
-        },
-        "next": 7
-      }
-    },
-    {
-      "id": 12,
       "line": {
         "data": {
           "speaker": "Aaron",
@@ -107,10 +105,10 @@
       }
     },
     {
-      "id": 13,
+      "id": 12,
       "call": {
         "functionIndex": 0,
-        "next": 6
+        "next": 5
       }
     }
   ]

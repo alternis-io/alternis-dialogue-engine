@@ -22,8 +22,10 @@ const Next = packed struct {
   value: u31 = undefined,
 
   pub fn jsonParse(allocator: std.mem.Allocator, source: anytype, options: json.ParseOptions) !@This() {
-    if (try source.peekNextTokenType() == .null)
+    if (try source.peekNextTokenType() == .null) {
+      _ = try source.next(); // consume null
       return .{};
+    }
     const value = try json.innerParse(u31, allocator, source, options);
     return .{ .value = value, .valid = true };
   }
