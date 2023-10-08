@@ -167,7 +167,7 @@ pub const DialogueContext = struct {
     nodes.ensureTotalCapacity(alloc, dialogue_data.nodes.len)
       catch |e| { r = Result(DialogueContext).fmt_err(alloc, "{}", .{e}); return r; };
 
-    for (dialogue_data.nodes) |json_node| {
+    for (dialogue_data.nodes, 0..) |json_node, i| {
       const maybe_node = json_node.toNode();
       if (maybe_node) |node| {
         nodes.append(alloc, node)
@@ -177,18 +177,18 @@ pub const DialogueContext = struct {
           inline .reply, .random_switch => |v| {
             for (v.nexts) |maybe_next| {
               if (maybe_next.toOptionalInt(usize)) |next| if (next >= dialogue_data.nodes.len) {
-                r = Result(DialogueContext).fmt_err(alloc, "bad next node '{}' on node '{}'", .{next, json_node.id});
+                r = Result(DialogueContext).fmt_err(alloc, "bad next node '{}' on node '{}'", .{next, i});
                 return r;
               };
             }
           },
           inline else => |n| if (n.next.toOptionalInt(usize)) |next| if (next >= dialogue_data.nodes.len) {
-            r = Result(DialogueContext).fmt_err(alloc, "bad next node '{}' on node '{}'", .{next, json_node.id});
+            r = Result(DialogueContext).fmt_err(alloc, "bad next node '{}' on node '{}'", .{next, i});
             return r;
           },
         }
       } else {
-        r = Result(DialogueContext).fmt_err(alloc, "{s}", .{"invalid node without type or data"});
+        r = Result(DialogueContext).fmt_err(alloc, "invalid node (index={}) without type or data", .{i});
         return r;
       }
     }
@@ -307,8 +307,6 @@ const DialogueJsonFormat = struct {
   version: usize,
   entryId: usize,
   nodes: []const struct {
-    id: usize,
-
     // FIXME: these must be in sync with the implementation of Node!
     // TODO: generate these from Node type...
     // NOTE: this scales poorly of course, a custom json parser would be much better
@@ -417,7 +415,7 @@ test "run large dialogue under zig api" {
   const src = try FileBuffer.fromDirAndPath(t.allocator, std.fs.cwd(), "./test/assets/sample1.alternis.json");
   defer src.free(t.allocator);
 
-  var ctx_result = DialogueContext.initFromJson(src.buffer, t.allocator , .{});
+  var ctx_result = DialogueContext.initFromJson(src.buffer, t.allocator , .{ .random_seed = 0 });
 
   defer if (ctx_result.is_ok()) ctx_result.value.deinit(t.allocator)
     // FIXME: need to add freeing logic to Result
@@ -429,4 +427,13 @@ test "run large dialogue under zig api" {
 
   var ctx = ctx_result.value;
   try t.expectEqual(@as(?usize, 0), ctx.current_node_index);
+
+  {
+    const step_result = ctx.step();
+    // FIXME: add pointer-descending eql impl
+    try t.expect(step_result == .line);
+    try t.expectEqualStrings("Aisha", step_result.line.speaker);
+    try t.expectEqualStrings("Hey", step_result.line.text);
+    try t.expectEqual(@as(?usize, 2), ctx.current_node_index);
+  }
 }
