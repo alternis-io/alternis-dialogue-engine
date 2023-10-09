@@ -140,7 +140,9 @@ async function getNativeLib(): Promise<WasmHelper<NativeModuleExports>> {
 /**
  * @param {string} json - a valid json string in the AlternisDialogueV1 format
  */
-export async function makeDialogueContext(json: string): Promise<DialogueContext> {
+export async function makeDialogueContext(json: string, {
+  randomSeed = 0n,
+} = {}): Promise<DialogueContext> {
   const nativeLib = await getNativeLib();
   const wasmJsonStr = nativeLib.marshalString(json);
 
@@ -152,7 +154,7 @@ export async function makeDialogueContext(json: string): Promise<DialogueContext
   const stepResultPtr = nativeLib._instance.exports.malloc(DialogueContext.StepResult.byteSize);
   const getStepResultView = () => new DataView(nativeLib._instance.exports.memory.buffer, stepResultPtr);
 
-  const nativeDlgCtx = nativeLib._instance.exports.ade_dialogue_ctx_create_json(wasmJsonStr.ptr, wasmJsonStr.len, 0n, errSlot);
+  const nativeDlgCtx = nativeLib._instance.exports.ade_dialogue_ctx_create_json(wasmJsonStr.ptr, wasmJsonStr.len, randomSeed, errSlot);
   const errPtr = getErrView().getUint32(0, true);
   if (errPtr !== 0) {
     const err = nativeLib.ptrToStr(errPtr);
