@@ -24,7 +24,9 @@
     <script type="module" src="./src/index.ts"></script>
     <script type="module">
       import "./src/index.ts"
-      import { makeDialogueContext } from "./src/index.ts";
+      //import { makeDialogueContext } from "./src/index.ts";
+      import { makeDialogueContext } from "./src/worker-api.ts";
+      import smallTestJson from "alternis-wasm/test/assets/simple1.alternis.json";
 
       // FIXME: import mocha or something instead
       function assert(cond, msg = "assertion error") {
@@ -44,34 +46,10 @@
         assert(cond, "not deep equal, see console");
       }
 
-      const smallTestJson = {
-        "entryId": 0,
-        "nodes": [
-          {
-            "id": 0,
-            "line": {
-              "data": {
-                "speaker": "test",
-                "text": "hello world!"
-              },
-              "next": 1
-            }
-          },
-          {
-            "id": 1,
-            "line": {
-              "data": {
-                "speaker": "test",
-                "text": "goodbye cruel world!"
-              }
-            }
-          }
-        ]
-      };
 
       const ctx = await makeDialogueContext(JSON.stringify(smallTestJson));
 
-      const step_result_1 = ctx.step();
+      const step_result_1 = await ctx.step();
       assertDeepEqual(step_result_1, {
         line:  {
           speaker: "test",
@@ -80,7 +58,7 @@
         },
       }, "step_result_1");
 
-      const step_result_2 = ctx.step();
+      const step_result_2 = await ctx.step();
       assertDeepEqual(step_result_2, {
         line:  {
           speaker: "test",
@@ -89,7 +67,7 @@
         },
       }, "step_result_2");
 
-      const step_result_3 = ctx.step();
+      const step_result_3 = await ctx.step();
       assertDeepEqual(step_result_3, {
         none: true,
       }, "step_result_3");

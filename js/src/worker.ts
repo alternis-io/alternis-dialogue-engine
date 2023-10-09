@@ -19,7 +19,7 @@ onmessagePromise.then(onmessage => onmessage(async (msg: any) => {
     if (msg.type === "makeDialogueContext") {
       const newCtx = await makeDialogueContext(...msg.args as [any, any]);
       ptrMap.set(id, newCtx);
-      postMessage({ id, ptr: id });
+      postMessage({ id, result: { ptr: id } });
 
     } else if (msg.type === "DialogueContext.step") {
       const ctx = ptrMap.get(msg.ptr);
@@ -41,8 +41,9 @@ onmessagePromise.then(onmessage => onmessage(async (msg: any) => {
       if (!ctx) throw Error("no such pointer");
       postMessage({ id, result: ctx.dispose() });
 
+    } else {
+      throw Error("unknown message type")
     }
-    throw Error("unknown message type")
 
   } catch (err: any) {
     postMessage({ id, error: `${err.message}\n${err.stack}` });

@@ -2,12 +2,14 @@
 import { resolve } from 'path'
 import { defineConfig } from 'vite'
 import dts from 'vite-plugin-dts'
-import { viteExternalsPlugin } from 'vite-plugin-externals'
 
 export default defineConfig(({ mode }) => ({
   plugins: [
     dts({ insertTypesEntry: true }),
   ],
+  worker: {
+    format: "es",
+  },
   build: {
     minify: false,
     lib: {

@@ -1,4 +1,5 @@
 import type * as InContextApi from ".";
+import MyWorker from "./worker.ts?worker";
 
 // FIXME: use a dependency?
 interface UnifiedWorker<Msg = any> {
@@ -13,7 +14,11 @@ async function getWorker() {
   if (!worker) {
     if("Worker" in globalThis) {
       const WorkerClass = globalThis.Worker;
-      const _worker = new WorkerClass(new URL("./worker.ts", import.meta.url), {
+      // const _worker = new WorkerClass(new URL("./worker", import.meta.url), {
+      //   name: "AlternisWasmWorker",
+      //   type: "module",
+      // });
+      const _worker = new MyWorker({
         name: "AlternisWasmWorker",
         type: "module",
       });
@@ -21,20 +26,23 @@ async function getWorker() {
       worker = {
         addEventListener: (...args) => _worker.addEventListener(...args),
         removeEventListener: (...args) => _worker.removeEventListener(...args),
-        postMessage: _worker.postMessage,
+        postMessage: (...args) => _worker.postMessage(...args),
       };
     } else {
-      // HACK: vite uses self and doesn't seem to want to make something node compatible
-      (globalThis as any).self = globalThis;
+      // FIXME: this doesn't work
+      // HACK: vite uses self and I can't tell how best to make it emit node-compatible
+      // output
+      (globalThis as any).self = { location: import.meta.url };
       const WorkerClass = await import("node:worker_threads").then(p => p.Worker)
-      const _worker = new WorkerClass(new URL("./worker.ts", import.meta.url), {
+      const _worker = new WorkerClass(await import("./worker.ts?url"), {
         name: "AlternisWasmWorker",
       });
+      delete (globalThis as any).self;
 
       worker = {
         addEventListener: (...args) => _worker.addListener(...args),
         removeEventListener: (...args) => _worker.removeListener(...args),
-        postMessage: _worker.postMessage,
+        postMessage: (...args) => _worker.postMessage(...args),
       };
     }
   }
@@ -60,10 +68,10 @@ async function asyncPostMessageWithId(msg: Record<string, any>) {
   return new Promise<any>((resolve, reject) => {
     const id = getMsgId();
     const handler = (msg: any) => {
-      if (msg.id !== id) return;
+      if (msg.data.id !== id) return;
       worker.removeEventListener("message", handler);
-      if (msg.error) reject(msg.error)
-      else resolve(msg.result);
+      if (msg.data.error) reject(msg.data.error)
+      else resolve(msg.data.result);
     };
     worker.addEventListener("message", handler);
     worker.postMessage({ ...msg, id });
