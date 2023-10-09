@@ -14,6 +14,10 @@
     ".": {
       "require": "./dist/alternis.umd.cjs",
       "import": "./dist/alternis.js"
+    },
+    "./worker": {
+      "require": "./dist/alternis-worker.umd.cjs",
+      "import": "./dist/alternis-worker.js"
     }
   },
   "scripts": {

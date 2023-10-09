@@ -10,9 +10,11 @@ export default defineConfig(({ mode }) => ({
   build: {
     minify: false,
     lib: {
-      entry: resolve(__dirname, 'src/index.ts'),
+      entry: {
+        alternis: resolve(__dirname, 'src/index.ts'),
+        "alternis-worker": resolve(__dirname, 'src/worker-api.ts'),
+      },
       name: 'Alternis',
-      fileName: 'alternis',
     },
     rollupOptions: {
     },
