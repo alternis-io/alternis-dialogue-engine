@@ -1,9 +1,47 @@
 import type * as InContextApi from ".";
 
-const worker = new Worker(new URL("./worker.ts", import.meta.url), {
-  name: "AlternisWasmWorker",
-  type: "module",
-});
+// FIXME: use a dependency?
+interface UnifiedWorker<Msg = any> {
+  addEventListener(evt: "message", handler: (msg: Msg) => void): void;
+  removeEventListener(evt: "message", handler: (msg: Msg) => void): void;
+  postMessage(msg: Msg): void;
+}
+
+let worker: UnifiedWorker;
+
+async function getWorker() {
+  if (!worker) {
+    if("Worker" in globalThis) {
+      const WorkerClass = globalThis.Worker;
+      const _worker = new WorkerClass(new URL("./worker.ts", import.meta.url), {
+        name: "AlternisWasmWorker",
+        type: "module",
+      });
+
+      worker = {
+        addEventListener: (...args) => _worker.addEventListener(...args),
+        removeEventListener: (...args) => _worker.removeEventListener(...args),
+        postMessage: _worker.postMessage,
+      };
+    } else {
+      // HACK: vite uses self and doesn't seem to want to make something node compatible
+      (globalThis as any).self = globalThis;
+      const WorkerClass = await import("node:worker_threads").then(p => p.Worker)
+      const _worker = new WorkerClass(new URL("./worker.ts", import.meta.url), {
+        name: "AlternisWasmWorker",
+      });
+
+      worker = {
+        addEventListener: (...args) => _worker.addListener(...args),
+        removeEventListener: (...args) => _worker.removeListener(...args),
+        postMessage: _worker.postMessage,
+      };
+    }
+  }
+
+  return worker;
+}
+
 
 export interface WorkerDialogueContext {
   step(): Promise<InContextApi.DialogueContext.StepResult>;
@@ -17,6 +55,8 @@ let msgId = 0;
 const getMsgId = () => msgId++;
 
 async function asyncPostMessageWithId(msg: Record<string, any>) {
+  const worker = await getWorker();
+
   return new Promise<any>((resolve, reject) => {
     const id = getMsgId();
     const handler = (msg: any) => {

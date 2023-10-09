@@ -2,6 +2,7 @@
 import { resolve } from 'path'
 import { defineConfig } from 'vite'
 import dts from 'vite-plugin-dts'
+import { viteExternalsPlugin } from 'vite-plugin-externals'
 
 export default defineConfig(({ mode }) => ({
   plugins: [
@@ -17,6 +18,7 @@ export default defineConfig(({ mode }) => ({
       name: 'Alternis',
     },
     rollupOptions: {
+      external: ['fs', 'path', 'node:worker_threads']
     },
   },
 }))
