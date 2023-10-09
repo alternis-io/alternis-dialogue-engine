@@ -2,22 +2,26 @@
   "name": "alternis-js",
   "version": "0.1.0",
   "description": "javascript bindings for the wasm version of the alternis dialogue engine",
-  "main": "dist/alternis.umd.cjs",
+  "main": "dist/alternis.cjs",
   "module": "dist/alternis.js",
   "typings": "dist/alternis.d.ts",
   "type": "module",
   "files": [
-    "dist",
+    "dist/*",
     "package.json"
   ],
   "exports": {
     ".": {
-      "require": "./dist/alternis.umd.cjs",
+      "require": "./dist/alternis.cjs",
       "import": "./dist/alternis.js"
     },
     "./worker": {
-      "require": "./dist/alternis-worker.umd.cjs",
+      "require": "./dist/alternis-worker.cjs",
       "import": "./dist/alternis-worker.js"
+    },
+    "./dist/worker-api": {
+      "require": "./src/worker-api.ts",
+      "import": "./src/worker-api.ts"
     }
   },
   "scripts": {
