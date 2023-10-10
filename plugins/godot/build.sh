@@ -1,0 +1,2 @@
+GODOT_VERSION="4.1"
+GODOT_BIN="${GODOT_BIN:-godot}"
