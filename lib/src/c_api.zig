@@ -34,14 +34,17 @@ pub fn setZigAlloc(in_alloc: std.mem.Allocator) void {
 export fn ade_dialogue_ctx_create_json(
     json_ptr: [*]const u8,
     json_len: usize,
-    // TODO: make this optional
     random_seed: u64,
+    no_interpolate: bool,
     err: ?*?[*:0]const u8
 ) ?*Api.DialogueContext {
     const ctx_result = Api.DialogueContext.initFromJson(
         json_ptr[0..json_len],
         alloc,
-        .{ .random_seed = random_seed }
+        .{
+            .random_seed = random_seed,
+            .no_interpolate = no_interpolate
+        },
     );
 
     // FIXME: better return err (e.g. this leaks)

@@ -70,21 +70,25 @@ const Node = union (enum) {
     texts: []const Slice(u8),
   },
   lock: struct {
-    booleanVariableIndex: Index,
+    boolean_variable_index: Index,
     next: Next = .{},
   },
   unlock: struct {
-    booleanVariableIndex: Index,
+    boolean_variable_index: Index,
     next: Next = .{},
   },
   call: struct {
-    functionIndex: Index,
+    function_index: Index,
     next: Next = .{},
   }
 };
 
 /// A function implemented by the environment
-const Callback = *fn() void;
+/// the payload must live as long as the callback is registered
+const Callback = struct {
+  ptr: *fn(*anyopaque) void,
+  payload: ?*anyopaque,
+};
 
 /// The possible types for a variable
 const VariableType = enum {
@@ -118,15 +122,27 @@ pub const DialogueContext = struct {
   pub const StepResult = union (enum) {
     none,
     options: struct {
-      // FIXME: not as easy to extern-ize
       texts: []const Slice(u8),
     },
     line: Line,
+    /// this allows consumers to not call step until async actions complete
+    function_called,
+
+    pub fn free(self: *@This(), alloc: std.mem.Allocator) void {
+      switch (self) {
+        .line, .options => |v| v.free(),
+        else => {}
+      }
+    }
   };
 
   pub const InitOpts = struct {
     // would it be more space-efficient to require u63? does it matter?
     random_seed: ?u64 = null,
+    /// do not interpolate text variables in texts when stepping through the dialogue
+    no_interpolate: bool = false,
+    // /// a plugin to transform text. e.g. add/strip html/bbcode, etc, for any environment
+    // textPlugin: TextPlugin? = null,
   };
 
   pub fn initFromJson(
@@ -286,15 +302,15 @@ pub const DialogueContext = struct {
           return .{.options = .{ .texts = v.texts }};
         },
         .lock => |v| {
-          self.variables.booleans.unset(v.booleanVariableIndex);
+          self.variables.booleans.unset(v.boolean_variable_index);
           self.current_node_index = v.next.toOptionalInt(usize);
         },
         .unlock => |v| {
-          self.variables.booleans.set(v.booleanVariableIndex);
+          self.variables.booleans.set(v.boolean_variable_index);
           self.current_node_index = v.next.toOptionalInt(usize);
         },
         .call => |v| {
-          if (self.functions[v.functionIndex]) |func| func();
+          if (self.functions[v.function_index]) |func| func();
           self.current_node_index = v.next.toOptionalInt(usize);
           // the user must call 'step' again to declare to "finish" their function
         },
@@ -428,12 +444,53 @@ test "run large dialogue under zig api" {
   var ctx = ctx_result.value;
   try t.expectEqual(@as(?usize, 0), ctx.current_node_index);
 
+  const SetNameCallback = struct {
+    fn impl(payload: *anyopaque) void {
+      var dialogue_ctx = @ptrCast(dialogue_ctx);
+      dialogue_ctx.setVariable("name", "Testy McTester");
+    }
+  }{};
+
+  ctx.registerCallback("ask player name", &SetNameCallback.impl, &ctx);
+
   {
     const step_result = ctx.step();
     // FIXME: add pointer-descending eql impl
     try t.expect(step_result == .line);
     try t.expectEqualStrings("Aisha", step_result.line.speaker);
     try t.expectEqualStrings("Hey", step_result.line.text);
+    try t.expectEqual(@as(?usize, 2), ctx.current_node_index);
+  }
+
+  {
+    const step_result = ctx.step();
+    try t.expect(step_result == .line);
+    try t.expectEqualStrings("Aaron", step_result.line.speaker);
+    try t.expectEqualStrings("Yo", step_result.line.text);
+    try t.expectEqual(@as(?usize, 2), ctx.current_node_index);
+  }
+
+  {
+    const step_result = ctx.step();
+    try t.expect(step_result == .line);
+    try t.expectEqualStrings("Aaron", step_result.line.speaker);
+    try t.expectEqualStrings("What's your name?", step_result.line.text);
+    try t.expectEqual(@as(?usize, 2), ctx.current_node_index);
+  }
+
+  {
+    const step_result = ctx.step();
+    try t.expect(step_result == .function_called);
+    try t.expectEqualStrings("Aaron", step_result.line.speaker);
+    try t.expectEqualStrings("What's your name?", step_result.line.text);
+    try t.expectEqual(@as(?usize, 2), ctx.current_node_index);
+  }
+
+  {
+    const step_result = ctx.step();
+    try t.expect(step_result == .line);
+    try t.expectEqualStrings("Aaron", step_result.line.speaker);
+    try t.expectEqualStrings("What's your name?", step_result.line.text);
     try t.expectEqual(@as(?usize, 2), ctx.current_node_index);
   }
 }
