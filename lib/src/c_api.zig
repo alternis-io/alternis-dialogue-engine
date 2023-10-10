@@ -83,6 +83,14 @@ const Line = extern struct {
     speaker: Slice(u8),
     text: Slice(u8),
     metadata: OptSlice(u8),
+
+    pub fn fromZig(zig_line: Api.Line) @This() {
+        return @This(){
+            .speaker = Slice(u8).fromZig(zig_line.speaker),
+            .text = Slice(u8).fromZig(zig_line.text),
+            .metadata = OptSlice(u8).fromZig(zig_line.metadata),
+        };
+    }
 };
 
 const StepResult = extern struct {
@@ -91,17 +99,22 @@ const StepResult = extern struct {
         none = 0,
         options = 1,
         line = 2,
+        function_called = 3,
     } = .none,
 
     /// data for each field
     data: extern union {
         none: void,
         options: extern struct {
-            // FIXME: extern'ing slices (this way) is ugly..
-            texts: Slice(Slice(u8)),
+            /// this should be allocated explicitly due to having to convert the Line
+            texts: Slice(Line),
         },
         line: Line,
     } = undefined,
+
+    pub fn free() void {
+
+    }
 };
 
 export fn ade_dialogue_ctx_step(dialogue_ctx: *Api.DialogueContext, result_loc: ?*StepResult) void {
@@ -110,17 +123,20 @@ export fn ade_dialogue_ctx_step(dialogue_ctx: *Api.DialogueContext, result_loc: 
     const result = dialogue_ctx.step();
 
     result_loc.?.* = switch (std.meta.activeTag(result)) {
-        // FIXME: surely there is a better way to do this? maybe using @tagName and inline else?
-        //inline else => |_, tag| @tagName(tag),
+        // FIXME: surely there is a better way to do this?
+        .line => .{ .tag = .line, .data = .{ .line = Line.fromZig(result.line) } },
+        .options => _: {
+            const texts = alloc.alloc(Line, result.options.texts.len);
+            for (result.options.texts, texts) |src, *dst| dst.* = Line.fromZig(src);
+            break :_ .{
+                .tag = .options,
+                .data = .{ .options = .{
+                    .texts = texts
+                } },
+            };
+        },
         .none => .{ .tag = .none },
-        .line => .{ .tag = .line, .data = .{ .line = .{
-            .speaker = Slice(u8).fromZig(result.line.speaker),
-            .text = Slice(u8).fromZig(result.line.text),
-            .metadata = OptSlice(u8).fromZig(result.line.metadata),
-        } } },
-        .options => .{ .tag = .options, .data = .{ .options = .{
-            .texts = Slice(Slice(u8)).fromZig(result.options.texts),
-        } } },
+        .function_called => .{ .tag = .function_called },
     };
 }
 

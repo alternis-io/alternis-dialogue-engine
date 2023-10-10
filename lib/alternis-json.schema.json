@@ -3,6 +3,18 @@
   "$id": "https://alternis.io/schemas/v1/alternis-json.schema.json",
   "title": "AlternisDialogueV1",
   "type": "object",
+  "definitions": {
+    "Line": {
+      "type": "object",
+      "description": "A spoken line",
+      "required": ["speaker", "text"],
+      "properties": {
+        "speaker": { "type": "string" },
+        "text": { "type": "string" },
+        "metadata": { "type": "string" }
+      }
+    }
+  },
   "properties": {
     "entryId": {
       "type": "number",
@@ -26,16 +38,7 @@
             "description": "The payload for a dialogue event of type 'line', where a speaker says some text",
             "required": ["data"],
             "properties": {
-              "data": {
-                "description": "properties of the spoken line",
-                "type": "object",
-                "required": ["speaker", "text"],
-                "properties": {
-                  "speaker": { "type": "string" },
-                  "text": { "type": "string" }
-                },
-                "additionalProperties": false
-              },
+              "data": { "$ref": "#/definitions/Line" },
               "next": {
                 "type": "number",
                 "description": "id of the node following this one",
@@ -70,7 +73,7 @@
               "texts": {
                 "description": "list of reply text per option, in order",
                 "type": "array",
-                "items": { "type": "string" }
+                "items": { "$ref": "#/definitions/Line" }
               },
               "nexts": {
                 "description": "list of next nodes per option, in order",

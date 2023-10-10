@@ -44,10 +44,15 @@ const Line = struct {
   speaker: []const u8,
   text: []const u8,
   metadata: ?[]const u8 = null,
+
+  /// free the text, since it is allocated for formatting
+  pub fn free(self: *@This(), alloc: std.mem.Allocator) void {
+    alloc.free(self.text);
+  }
 };
 
 const RandomSwitch = struct {
-  nexts: []const Next, // does it make sense for these to be optional?
+  nexts: []const Next,
   chances: []const u32,
   total_chances: u64,
 
@@ -70,15 +75,15 @@ const Node = union (enum) {
     texts: []const Slice(u8),
   },
   lock: struct {
-    boolean_variable_index: Index,
+    boolean_var_name: Index,
     next: Next = .{},
   },
   unlock: struct {
-    boolean_variable_index: Index,
+    boolean_var_name: Index,
     next: Next = .{},
   },
   call: struct {
-    function_index: Index,
+    function_name: Index,
     next: Next = .{},
   }
 };
@@ -86,8 +91,8 @@ const Node = union (enum) {
 /// A function implemented by the environment
 /// the payload must live as long as the callback is registered
 const Callback = struct {
-  ptr: *fn(*anyopaque) void,
-  payload: ?*anyopaque,
+  function: *fn(*anyopaque) void,
+  payload: ?*anyopaque = null,
 };
 
 /// The possible types for a variable
@@ -99,17 +104,16 @@ const VariableType = enum {
 };
 
 pub const DialogueContext = struct {
-  // FIXME: don't copy the input json, deep copy the relevant results
-  TEMP_json_copy: []const u8,
+  // FIXME: deep copy the relevant results, this keeps unused strings
+  arena: std.heap.ArenaAllocator,
 
   nodes: std.MultiArrayList(Node),
-  functions: []const ?Callback,
+  functions: std.StringHashMapUnmanaged(?Callback),
   variables: struct {
     /// has upper size bound of Index
-    strings: [][]const u8,
-    // FIXME: use a dynamic bitset
-    /// has upper size bound of Index
-    booleans: std.DynamicBitSet,
+    strings: std.StringHashMapUnmanaged([]const u8),
+    // FIXME: check characteristics of storing bools in hashmap
+    booleans: std.StringHashMapUnmanaged(bool),
   },
 
   entry_node_index: usize,
@@ -122,7 +126,7 @@ pub const DialogueContext = struct {
   pub const StepResult = union (enum) {
     none,
     options: struct {
-      texts: []const Slice(u8),
+      texts: []const Line,
     },
     line: Line,
     /// this allows consumers to not call step until async actions complete
@@ -130,7 +134,8 @@ pub const DialogueContext = struct {
 
     pub fn free(self: *@This(), alloc: std.mem.Allocator) void {
       switch (self) {
-        .line, .options => |v| v.free(),
+        .line => |l| l.free(alloc),
+        .options => |o| { for (o.texts) |l| l.free(alloc); },
         else => {}
       }
     }
@@ -152,11 +157,8 @@ pub const DialogueContext = struct {
   ) Result(DialogueContext) {
     var r = Result(DialogueContext).err("not initialized");
 
-    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    defer arena.deinit();
-    // FIXME: badly used, need to dupe all json allocations
-    // (e.g. json with escapes will be invalid)
-    // allocator for temporary allocations, for permanent ones, use the 'alloc' parameter
+    // FIXME: deinit this and deep clone out all needed strings
+    var arena = std.heap.ArenaAllocator.init(alloc);
     const arena_alloc = arena.allocator();
 
     // FIXME: cloning only the necessary strings will lower memory footprint,
@@ -166,11 +168,12 @@ pub const DialogueContext = struct {
     defer if (r.is_err()) alloc.free(owned_json_text_copy);
 
     var json_diagnostics = json.Diagnostics{};
-    var json_reader = json.Scanner.initCompleteInput(arena_alloc, owned_json_text_copy);
-    json_reader.enableDiagnostics(&json_diagnostics);
+    var json_scanner = json.Scanner.initCompleteInput(arena_alloc, owned_json_text_copy);
+    json_scanner.enableDiagnostics(&json_diagnostics);
 
-    const dialogue_data = json.parseFromTokenSourceLeaky(DialogueJsonFormat, arena_alloc, &json_reader, .{
+    const dialogue_data = json.parseFromTokenSourceLeaky(DialogueJsonFormat, arena_alloc, &json_scanner, .{
       .ignore_unknown_fields = true,
+      .allocate = .alloc_always,
     }) catch |e| { r = Result(DialogueContext).fmt_err(alloc, "{}: {}", .{e, json_diagnostics}); return r; };
 
     if (dialogue_data.version != 1) {
@@ -215,7 +218,8 @@ pub const DialogueContext = struct {
     var strings = alloc.alloc([]const u8, 0)
       catch |e| { r = Result(DialogueContext).fmt_err(alloc, "{}", .{e}); return r; };
 
-    var functions = alloc.alloc(Callback, 0)
+    var functions = std.StringHashMapUnmanaged(?Callback).init();
+    functions.ensureTotalCapacityPrecise(dialogue_data.functions.len)
       catch |e| { r = Result(DialogueContext).fmt_err(alloc, "{}", .{e}); return r; };
 
     const seed = opts.random_seed orelse _: {
@@ -242,7 +246,7 @@ pub const DialogueContext = struct {
       .current_node_index = dialogue_data.entryId,
       .entry_node_index = dialogue_data.entryId,
       .rand = std.rand.DefaultPrng.init(seed),
-      .TEMP_json_copy = owned_json_text_copy,
+      .arena = arena,
     });
 
     return r;
@@ -257,10 +261,22 @@ pub const DialogueContext = struct {
     alloc.free(self.functions);
     alloc.free(self.variables.strings);
     self.variables.booleans.deinit();
-    alloc.free(self.TEMP_json_copy);
+    self.arena.deinit();
   }
 
   pub fn reset(self: *@This()) void {
+    self.current_node_index = self.entry_node_index;
+  }
+
+  // FIXME: isn't this technically next node?
+  /// returns -1 if current node index is invalid. 0 is the entry node
+  pub fn getCurrentNodeIndex(self: *@This()) i32 {
+    return @intCast(self.current_node_index orelse -1);
+  }
+
+  pub fn registerCallback(self: *@This(), name: []const u8, callback: Callback) void {
+    self.functions.put(name, callback)
+      catch |e| std.debug.panic("Put memory error: {}", .{e});
     self.current_node_index = self.entry_node_index;
   }
 
@@ -302,15 +318,16 @@ pub const DialogueContext = struct {
           return .{.options = .{ .texts = v.texts }};
         },
         .lock => |v| {
-          self.variables.booleans.unset(v.boolean_variable_index);
+          self.variables.booleans.put(v.boolean_var_name);
+          self.variables.booleans.unset(v.boolean_var_name);
           self.current_node_index = v.next.toOptionalInt(usize);
         },
         .unlock => |v| {
-          self.variables.booleans.set(v.boolean_variable_index);
+          self.variables.booleans.set(v.boolean_var_name);
           self.current_node_index = v.next.toOptionalInt(usize);
         },
         .call => |v| {
-          if (self.functions[v.function_index]) |func| func();
+          if (self.functions.get(v.function_name)) |func| func();
           self.current_node_index = v.next.toOptionalInt(usize);
           // the user must call 'step' again to declare to "finish" their function
         },
@@ -446,7 +463,7 @@ test "run large dialogue under zig api" {
 
   const SetNameCallback = struct {
     fn impl(payload: *anyopaque) void {
-      var dialogue_ctx = @ptrCast(dialogue_ctx);
+      var dialogue_ctx: *DialogueContext = @ptrCast(payload);
       dialogue_ctx.setVariable("name", "Testy McTester");
     }
   }{};
@@ -481,16 +498,14 @@ test "run large dialogue under zig api" {
   {
     const step_result = ctx.step();
     try t.expect(step_result == .function_called);
-    try t.expectEqualStrings("Aaron", step_result.line.speaker);
-    try t.expectEqualStrings("What's your name?", step_result.line.text);
-    try t.expectEqual(@as(?usize, 2), ctx.current_node_index);
   }
 
   {
     const step_result = ctx.step();
-    try t.expect(step_result == .line);
-    try t.expectEqualStrings("Aaron", step_result.line.speaker);
-    try t.expectEqualStrings("What's your name?", step_result.line.text);
+    try t.expect(step_result == .options);
+    try t.expectEqual(2, step_result.options.texts.len);
+    try t.expectEqualStrings("It's Testy McTester and I like waffles", step_result.options.texts.ptr[0]);
+    try t.expectEqualStrings("It's Testy McTester", step_result.options.texts.ptr[1]);
     try t.expectEqual(@as(?usize, 2), ctx.current_node_index);
   }
 }
