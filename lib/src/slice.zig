@@ -17,15 +17,24 @@ pub fn Slice(comptime T: type) type {
         }
 
         pub fn jsonParse(allocator: std.mem.Allocator, source: anytype, options: json.ParseOptions) !@This() {
-            return @This().fromZig(try json.innerParse([]const u8, allocator, source, options));
+            const is_string_slice =
+                    @typeInfo(T)               == .Pointer
+                and @typeInfo(T).Pointer.Size  == .Slice
+                and @typeInfo(T).Pointer.child == u8;
+
+            if (is_string_slice) {
+                return @This().fromZig(try json.innerParse([]const u8, allocator, source, options));
+            } else {
+                return @This().fromZig(try json.innerParse([]const T, allocator, source, options));
+            }
         }
     };
 }
 
 pub fn OptSlice(comptime T: type) type {
     return extern struct {
-        ptr: ?[*]const T,
-        len: usize,
+        ptr: ?[*]const T = null,
+        len: usize = 0,
 
         pub fn fromZig(slice: ?[]const T) @This() {
             return if (slice) |s| @This(){ .ptr = s.ptr, .len = s.len }

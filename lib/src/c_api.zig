@@ -93,51 +93,9 @@ const Line = extern struct {
     }
 };
 
-const StepResult = extern struct {
-    /// tag indicates which field is active
-    tag: enum (u8) {
-        none = 0,
-        options = 1,
-        line = 2,
-        function_called = 3,
-    } = .none,
-
-    /// data for each field
-    data: extern union {
-        none: void,
-        options: extern struct {
-            /// this should be allocated explicitly due to having to convert the Line
-            texts: Slice(Line),
-        },
-        line: Line,
-    } = undefined,
-
-    pub fn free() void {
-
-    }
-};
-
-export fn ade_dialogue_ctx_step(dialogue_ctx: *Api.DialogueContext, result_loc: ?*StepResult) void {
+export fn ade_dialogue_ctx_step(dialogue_ctx: *Api.DialogueContext, result_loc: ?*Api.DialogueContext.StepResult) void {
     std.debug.assert(result_loc != null);
-
-    const result = dialogue_ctx.step();
-
-    result_loc.?.* = switch (std.meta.activeTag(result)) {
-        // FIXME: surely there is a better way to do this?
-        .line => .{ .tag = .line, .data = .{ .line = Line.fromZig(result.line) } },
-        .options => _: {
-            const texts = alloc.alloc(Line, result.options.texts.len);
-            for (result.options.texts, texts) |src, *dst| dst.* = Line.fromZig(src);
-            break :_ .{
-                .tag = .options,
-                .data = .{ .options = .{
-                    .texts = texts
-                } },
-            };
-        },
-        .none => .{ .tag = .none },
-        .function_called => .{ .tag = .function_called },
-    };
+    result_loc.?.* = dialogue_ctx.step();
 }
 
 // for now this just invokes failing allocator and panics...
@@ -153,11 +111,11 @@ test "run small dialogue under c api" {
     const src = try FileBuffer.fromDirAndPath(t.allocator, std.fs.cwd(), "./test/assets/simple1.alternis.json");
     defer src.free(t.allocator);
 
-    var ctx = ade_dialogue_ctx_create_json(src.buffer.ptr, src.buffer.len, 0, null);
+    var ctx = ade_dialogue_ctx_create_json(src.buffer.ptr, src.buffer.len, 0, false, null);
     try t.expect(ctx != null);
     defer ade_dialogue_ctx_destroy(ctx.?);
 
-    var step_result: StepResult = undefined;
+    var step_result: Api.DialogueContext.StepResult = undefined;
     ade_dialogue_ctx_step(ctx.?, &step_result);
     try t.expect(step_result.tag == .line);
     try t.expectEqualStrings("test", step_result.data.line.speaker.toZig());
@@ -171,6 +129,6 @@ test "run small dialogue under c api" {
     try t.expectEqual(@as(?usize, null), ctx.?.current_node_index);
 
     ade_dialogue_ctx_step(ctx.?, &step_result);
-    try t.expect(step_result.tag == .none);
+    try t.expect(step_result.tag == .done);
     try t.expectEqual(@as(?usize, null), ctx.?.current_node_index);
 }
