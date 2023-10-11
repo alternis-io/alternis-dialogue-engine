@@ -292,7 +292,6 @@ pub const DialogueContext = struct {
     }
 
     var step_options_buffer = MutSlice(Line).fromZig(alloc.alloc(Line, max_option_count) catch unreachable);
-    //const step_options_buffer: MutSlice(Line) = undefined;
 
     const seed = opts.random_seed orelse _: {
       if (builtin.os.tag == .freestanding) {
@@ -433,7 +432,7 @@ pub const DialogueContext = struct {
 
           return .{
             .tag = .options,
-            .data = .{.options = .{ .texts = self.step_options_buffer.asConst() }}
+            .data = .{.options = .{ .texts = Slice(Line).fromZig(self.step_options_buffer.toZig()[0..slot_index]) }}
           };
         },
         .lock => |v| {
