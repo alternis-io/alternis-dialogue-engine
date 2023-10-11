@@ -67,6 +67,18 @@
             "text": "Wanna go eat waffles?",
             "speaker": "Aisha"
           }
+        ],
+        "conditions": [
+          {
+            "action": "none"
+          },
+          {
+            "action": "none"
+          },
+          {
+            "action": "locked",
+            "variable": "Aaron likes you"
+          }
         ]
       }
     },

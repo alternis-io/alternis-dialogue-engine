@@ -142,7 +142,7 @@ const VariableType = enum {
 };
 
 pub const DialogueContext = struct {
-  // FIXME: deep copy the relevant results, this keeps unused strings
+  // FIXME: deep copy the relevant results, this keeps unused json strings
   arena: std.heap.ArenaAllocator,
 
   nodes: std.MultiArrayList(Node),
@@ -341,6 +341,8 @@ pub const DialogueContext = struct {
   }
 
   pub fn setVariableBoolean(self: *@This(), name: []const u8, value: bool) void {
+    // FIXME: this is a bug, since ptrs can be invalidated by putting the wrong name.
+    // it should be restricted to the known set of variables
     self.variables.booleans.put(name, value)
       catch |e| std.debug.panic("Put memory error, how did that happen?: {}", .{e});
   }
@@ -435,14 +437,16 @@ const ConditionJson = struct {
       variable: ?[]const u8 = null,
     }, allocator, source, options);
 
-    if (std.meta.eql(value.action, "none"))
-      return .{ .action = .none }
-    else if (std.meta.eql(value.action, "locked"))
-      return .{ .action = .locked, .variable = value.variable orelse return error.MissingField }
-    else if (std.meta.eql(value.action, "unlocked"))
-      return .{ .action = .unlocked, .variable = value.variable orelse return error.MissingField }
-    else
-      return error.UnexpectedToken;
+    return if (std.mem.eql(u8, value.action, "none"))
+      .{ .action = .none }
+    else if (std.mem.eql(u8, value.action, "locked"))
+      .{ .action = .locked, .variable = value.variable orelse return error.MissingField }
+    else if (std.mem.eql(u8, value.action, "unlocked"))
+      .{ .action = .unlocked, .variable = value.variable orelse return error.MissingField }
+    else _: {
+      std.debug.print("{any}, {s}\n", .{value, value.action });
+      break :_ error.UnexpectedToken;
+    };
   }
 };
 
@@ -459,14 +463,14 @@ const DialogueJson = struct {
   nodes: []const struct {
     // FIXME: these must be in sync with the implementation of Node!
     // TODO: generate these from Node type...
-    // NOTE: this scales poorly of course, a custom json parser would be much better
+    // NOTE: this scales poorly of course, custom json parsing would probably be better
     line: ?@typeInfo(Node).Union.fields[0].type = null,
     random_switch: ?struct {
       nexts: []const Next,
       chances: []const u32,
     } = null,
     // FIXME: update json schema
-    reply: ?ReplyJson,
+    reply: ?ReplyJson = null,
     lock: ?@typeInfo(Node).Union.fields[3].type = null,
     unlock: ?@typeInfo(Node).Union.fields[4].type = null,
     call: ?@typeInfo(Node).Union.fields[5].type = null,
@@ -509,6 +513,7 @@ const DialogueJson = struct {
       return null;
     }
   },
+
   functions: []const struct {
     name: []const u8
   } = &.{},
