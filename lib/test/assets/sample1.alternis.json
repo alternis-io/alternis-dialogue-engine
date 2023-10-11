@@ -48,7 +48,7 @@
     {
       "id": 6,
       "call": {
-        "functionIndex": 0,
+        "function_name": "ask player name",
         "next": 7
       }
     },
@@ -61,16 +61,25 @@
           10
         ],
         "texts": [
-          "It's {name} and I like waffles",
-          "It's {name}",
-          "Wanna go eat waffles?"
+          {
+            "text": "It's {name} and I like waffles",
+            "speaker": "Aisha"
+          },
+          {
+            "text": "It's {name}",
+            "speaker": "Aisha"
+          },
+          {
+            "text": "Wanna go eat waffles?",
+            "speaker": "Aisha"
+          }
         ]
       }
     },
     {
       "id": 8,
       "unlock": {
-        "booleanVariableIndex": 0,
+        "boolean_var_name": "Aaron likes you",
         "next": 11
       }
     },
@@ -126,7 +135,7 @@
     {
       "id": 6,
       "call": {
-        "functionIndex": 0,
+        "function_name": "ask player name",
         "next": 7
       }
     },
@@ -139,16 +148,25 @@
           10
         ],
         "texts": [
-          "It's {name} and I like waffles",
-          "It's {name}",
-          "Wanna go eat waffles?"
+          {
+            "text": "It's {name} and I like waffles",
+            "speaker": "Aisha"
+          },
+          {
+            "text": "It's {name}",
+            "speaker": "Aisha"
+          },
+          {
+            "text": "Wanna go eat waffles?",
+            "speaker": "Aisha"
+          }
         ]
       }
     },
     {
       "id": 8,
       "unlock": {
-        "booleanVariableIndex": 0,
+        "boolean_var_name": "Aaron likes you",
         "next": 11
       }
     },
