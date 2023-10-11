@@ -5,6 +5,7 @@ const t = std.testing;
 const Result = @import("./result.zig").Result;
 const Slice = @import("./slice.zig").Slice;
 const OptSlice = @import("./slice.zig").OptSlice;
+const MutSlice = @import("./slice.zig").MutSlice;
 const FileBuffer = @import("./FileBuffer.zig");
 
 
@@ -161,6 +162,9 @@ pub const DialogueContext = struct {
   /// the pseudo-random number generator for the RandomSwitch
   rand: std.rand.DefaultPrng,
 
+  /// buffer for storing the dynamic list of a StepResult .options variant
+  step_options_buffer: MutSlice(Line),
+
   // FIXME: the alignments are stupid large here
   pub const StepResult = extern struct {
     /// tag indicates which field is active
@@ -190,9 +194,6 @@ pub const DialogueContext = struct {
       }
     }
   };
-
-  /// buffer for storing the dynamic list of a StepResult .options variant
-  step_options_buffer: Slice(Line),
 
   pub const InitOpts = struct {
     // would it be more space-efficient to require u63? does it matter?
@@ -273,8 +274,10 @@ pub const DialogueContext = struct {
                 return r;
               };
             }
-            if (node == .reply) {
-              max_option_count = @max(v.texts.len, max_option_count);
+
+            switch (node) {
+              .reply => |as_reply| { max_option_count = @max(as_reply.texts.len, max_option_count); },
+              else => {}
             }
           },
           inline else => |n| if (n.next.toOptionalInt(usize)) |next| if (next >= dialogue_data.nodes.len) {
@@ -288,7 +291,8 @@ pub const DialogueContext = struct {
       }
     }
 
-    const step_options_buffer = Slice.fromZig(alloc.alloc(Line, max_option_count) catch unreachable);
+    var step_options_buffer = MutSlice(Line).fromZig(alloc.alloc(Line, max_option_count) catch unreachable);
+    //const step_options_buffer: MutSlice(Line) = undefined;
 
     const seed = opts.random_seed orelse _: {
       if (builtin.os.tag == .freestanding) {
@@ -323,7 +327,7 @@ pub const DialogueContext = struct {
 
   pub fn deinit(self: *@This(), alloc: std.mem.Allocator) void {
     self.nodes.deinit(alloc);
-    alloc.free(self.step_options_buffer);
+    alloc.free(self.step_options_buffer.toZig());
     self.functions.deinit();
     // NOTE: keys and string values are in the arena
     self.variables.booleans.deinit();
@@ -407,8 +411,30 @@ pub const DialogueContext = struct {
           self.current_node_index = v.nexts[v.nexts.len - 1].toOptionalInt(usize);
         },
         .reply => |v| {
-          // FIXME: use a preallocated (max-sized) buffer for returning options that vary between steps
-          return .{ .tag = .options, .data = .{.options = .{ .texts = v.texts }}};
+          std.debug.assert(v.texts.len <= self.step_options_buffer.len);
+
+          var slot_index: usize = 0;
+          for (v.texts.toZig(), v.conditions) |text, cond| {
+            switch (cond) {
+              .locked => |bool_ptr| {
+                const is_locked = !bool_ptr.*;
+                if (!is_locked) continue;
+              },
+              .unlocked => |bool_ptr| {
+                const is_unlocked = bool_ptr.*;
+                if (!is_unlocked) continue;
+              },
+              else => {},
+            }
+
+            self.step_options_buffer.toZig()[slot_index] = text;
+            slot_index += 1;
+          }
+
+          return .{
+            .tag = .options,
+            .data = .{.options = .{ .texts = self.step_options_buffer.asConst() }}
+          };
         },
         .lock => |v| {
           self.variables.booleans.put(v.boolean_var_name, false)
