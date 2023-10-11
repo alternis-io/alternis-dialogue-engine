@@ -165,21 +165,21 @@ pub const DialogueContext = struct {
   pub const StepResult = extern struct {
     /// tag indicates which field is active
     tag: enum (u8) {
-        done = 0,
-        options = 1,
-        line = 2,
-        /// this allows consumers to not call step until async actions complete
-        function_called = 3,
+      done = 0,
+      options = 1,
+      line = 2,
+      /// this allows consumers to not call step until async actions complete
+      function_called = 3,
     } = .done,
 
     /// data for each field
     data: extern union {
-        finished: void,
-        options: extern struct {
-            texts: Slice(Line),
-        },
-        line: Line,
-        function_called: void,
+      finished: void,
+      options: extern struct {
+        texts: Slice(Line),
+      },
+      line: Line,
+      function_called: void,
     } = undefined,
 
     pub fn free(self: *@This(), alloc: std.mem.Allocator) void {
@@ -190,6 +190,9 @@ pub const DialogueContext = struct {
       }
     }
   };
+
+  /// buffer for storing the dynamic list of a StepResult .options variant
+  step_options_buffer: Slice(Line),
 
   pub const InitOpts = struct {
     // would it be more space-efficient to require u63? does it matter?
@@ -255,6 +258,8 @@ pub const DialogueContext = struct {
       functions.put(json_func.name, null)
         catch |e| std.debug.panic("put memory error: {}", .{e});
 
+    var max_option_count: usize = 0;
+
     for (dialogue_data.nodes, 0..) |json_node, i| {
       if (json_node.toNode(alloc, &booleans)) |node| {
         nodes.append(alloc, node)
@@ -268,6 +273,9 @@ pub const DialogueContext = struct {
                 return r;
               };
             }
+            if (node == .reply) {
+              max_option_count = @max(v.texts.len, max_option_count);
+            }
           },
           inline else => |n| if (n.next.toOptionalInt(usize)) |next| if (next >= dialogue_data.nodes.len) {
             r = Result(DialogueContext).fmt_err(alloc, "bad next node '{}' on node '{}'", .{next, i});
@@ -280,6 +288,7 @@ pub const DialogueContext = struct {
       }
     }
 
+    const step_options_buffer = Slice.fromZig(alloc.alloc(Line, max_option_count) catch unreachable);
 
     const seed = opts.random_seed orelse _: {
       if (builtin.os.tag == .freestanding) {
@@ -306,23 +315,26 @@ pub const DialogueContext = struct {
       .entry_node_index = dialogue_data.entryId,
       .rand = std.rand.DefaultPrng.init(seed),
       .arena = arena,
+      .step_options_buffer = step_options_buffer,
     });
 
     return r;
   }
 
-  fn currentNode(self: @This()) ?Node {
-    return if (self.current_node_index) |index| self.nodes.get(index) else null;
-  }
-
   pub fn deinit(self: *@This(), alloc: std.mem.Allocator) void {
     self.nodes.deinit(alloc);
+    alloc.free(self.step_options_buffer);
     self.functions.deinit();
     // NOTE: keys and string values are in the arena
     self.variables.booleans.deinit();
     self.variables.strings.deinit();
     self.arena.deinit();
   }
+
+  fn currentNode(self: @This()) ?Node {
+    return if (self.current_node_index) |index| self.nodes.get(index) else null;
+  }
+
 
   pub fn reset(self: *@This()) void {
     self.current_node_index = self.entry_node_index;
@@ -351,6 +363,7 @@ pub const DialogueContext = struct {
     // will be cleaned up when area is deinited
     const duped = self.arena.allocator().dupe(u8, value)
       catch |e| std.debug.panic("{}", .{e});
+
     self.variables.strings.put(name, duped)
       catch |e| std.debug.panic("{}", .{e});
   }
@@ -394,6 +407,7 @@ pub const DialogueContext = struct {
           self.current_node_index = v.nexts[v.nexts.len - 1].toOptionalInt(usize);
         },
         .reply => |v| {
+          // FIXME: use a preallocated (max-sized) buffer for returning options that vary between steps
           return .{ .tag = .options, .data = .{.options = .{ .texts = v.texts }}};
         },
         .lock => |v| {
