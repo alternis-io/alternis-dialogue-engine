@@ -7,6 +7,7 @@ const Slice = @import("./slice.zig").Slice;
 const OptSlice = @import("./slice.zig").OptSlice;
 const MutSlice = @import("./slice.zig").MutSlice;
 const FileBuffer = @import("./FileBuffer.zig");
+const text_interp = @import("./text_interp.zig");
 
 
 // FIXME: only in wasm
@@ -49,6 +50,17 @@ const Line = extern struct {
   pub fn free(self: *@This(), alloc: std.mem.Allocator) void {
     alloc.free(self.text.toZig());
   }
+
+  // the returned Line must be freed
+  pub fn interpolate(self: @This(), alloc: std.mem.Allocator, vars: *std.StringHashMap([]const u8)) Line {
+    return Line{
+      .speaker = self.speaker,
+      .text = Slice(u8).fromZig(
+        text_interp.interpolate_template(self.text.toZig(), alloc, vars)
+          catch |e| std.debug.panic("error: '{}', perhaps a bad variable reference?", .{e})),
+      .metadata = self.metadata,
+    };
+  }
 };
 
 const RandomSwitch = struct {
@@ -69,7 +81,8 @@ const ConditionType = @TypeOf((Reply{.conditions = &.{.{.locked = &stupid_hack}}
 
 const Reply = struct {
   nexts: []const Next = &.{}, // does it make sense for these to be optional?
-  /// utf8 assumed (uses externable type)
+  // FIXME: rename to options or something
+  /// utf8 assumed (uses externable type and passes out to C API assuming no one will edit it)
   texts: Slice(Line) = .{},
 
   conditions: []const union (enum) {
@@ -162,8 +175,13 @@ pub const DialogueContext = struct {
   /// the pseudo-random number generator for the RandomSwitch
   rand: std.rand.DefaultPrng,
 
+  do_interpolate: bool,
+
   /// buffer for storing the dynamic list of a StepResult .options variant
   step_options_buffer: MutSlice(Line),
+
+  /// step() stores a copy of its result here, so that its contents can be freed between steps
+  step_result_buffer: ?StepResult = null,
 
   // FIXME: the alignments are stupid large here
   pub const StepResult = extern struct {
@@ -180,7 +198,7 @@ pub const DialogueContext = struct {
     data: extern union {
       finished: void,
       options: extern struct {
-        texts: Slice(Line),
+        texts: MutSlice(Line),
       },
       line: Line,
       function_called: void,
@@ -188,8 +206,8 @@ pub const DialogueContext = struct {
 
     pub fn free(self: *@This(), alloc: std.mem.Allocator) void {
       switch (self.tag) {
-        .line => self.list.free(alloc),
-        .options => { for (self.options.texts) |l| l.free(alloc); },
+        .line => self.data.line.free(alloc),
+        .options => { for (self.data.options.texts.toZig()) |*l| l.free(alloc); },
         else => {}
       }
     }
@@ -319,12 +337,14 @@ pub const DialogueContext = struct {
       .rand = std.rand.DefaultPrng.init(seed),
       .arena = arena,
       .step_options_buffer = step_options_buffer,
+      .do_interpolate = !opts.no_interpolate,
     });
 
     return r;
   }
 
   pub fn deinit(self: *@This(), alloc: std.mem.Allocator) void {
+    // no need to free self.step_result_buffer, it uses the arena
     self.nodes.deinit(alloc);
     alloc.free(self.step_options_buffer.toZig());
     self.functions.deinit();
@@ -355,13 +375,16 @@ pub const DialogueContext = struct {
       catch |e| std.debug.panic("put memory error, shouldn't be possible?: {}", .{e});
   }
 
+  /// the passed in "name" is not copied, so a reference to it must remain
   pub fn setVariableBoolean(self: *@This(), name: []const u8, value: bool) void {
     // FIXME: this is a bug, since ptrs can be invalidated by putting the wrong name.
-    // it should be restricted to the known set of variables
+    // it should be restricted to the known set of variables (maybe use getPtr instead?)
     self.variables.booleans.put(name, value)
       catch |e| std.debug.panic("Put memory error, how did that happen?: {}", .{e});
   }
 
+  /// the passed in "name" is not copied, so a reference to it must remain.
+  /// the passed in "value" is always copied
   pub fn setVariableString(self: *@This(), name: []const u8, value: []const u8) void {
     // will be cleaned up when area is deinited
     const duped = self.arena.allocator().dupe(u8, value)
@@ -382,6 +405,13 @@ pub const DialogueContext = struct {
   }
 
   pub fn step(self: *@This()) StepResult {
+    if (self.do_interpolate) if (self.step_result_buffer) |*prev_step_result|
+      prev_step_result.free(self.arena.allocator());
+
+    // all returns in this function must set and then return this variable
+    var result: StepResult = undefined;
+    defer self.step_result_buffer = result;
+
     while (true) {
       const current_node = self.currentNode() orelse return .{ .tag = .done };
 
@@ -389,7 +419,15 @@ pub const DialogueContext = struct {
         .line => |v| {
           // FIXME: technically this seems to mean nextNodeIndex!
           self.current_node_index = v.next.toOptionalInt(usize);
-          return .{ .tag = .line, .data = .{.line = v.data}};
+          result = .{
+            .tag = .line,
+            .data = .{
+              .line = if (self.do_interpolate)
+                v.data.interpolate(self.arena.allocator(), &self.variables.strings)
+                else v.data
+            }
+          };
+          return result;
         },
         .random_switch => |v| {
           // guaranteed to be in [0, 1) range
@@ -426,14 +464,20 @@ pub const DialogueContext = struct {
               else => {},
             }
 
-            self.step_options_buffer.toZig()[slot_index] = text;
+            self.step_options_buffer.toZig()[slot_index]
+              = if (self.do_interpolate)
+                  text.interpolate(self.arena.allocator(), &self.variables.strings)
+                else text;
             slot_index += 1;
           }
 
-          return .{
+          result = .{
             .tag = .options,
-            .data = .{.options = .{ .texts = Slice(Line).fromZig(self.step_options_buffer.toZig()[0..slot_index]) }}
+            .data = .{ .options = .{
+              .texts = MutSlice(Line).fromZig(self.step_options_buffer.toZig()[0..slot_index]),
+            }}
           };
+          return result;
         },
         .lock => |v| {
           self.variables.booleans.put(v.boolean_var_name, false)
@@ -451,7 +495,8 @@ pub const DialogueContext = struct {
           if (self.functions.get(v.function_name)) |stored_cb| if (stored_cb) |cb| cb.function(cb.payload);
           self.current_node_index = v.next.toOptionalInt(usize);
           // the user must call 'step' again to get the real step
-          return .{ .tag = .function_called };
+          result = .{ .tag = .function_called };
+          return result;
         },
       }
     }
@@ -675,6 +720,6 @@ test "run large dialogue under zig api" {
     try t.expectEqual(@as(usize, 2), step_result.data.options.texts.len);
     try t.expectEqualStrings("It's Testy McTester and I like waffles", step_result.data.options.texts.ptr[0].text.toZig());
     try t.expectEqualStrings("It's Testy McTester", step_result.data.options.texts.ptr[1].text.toZig());
-    try t.expectEqual(@as(?usize, 4), ctx.current_node_index);
+    try t.expectEqual(@as(?usize, 5), ctx.current_node_index);
   }
 }
