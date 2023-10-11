@@ -123,5 +123,26 @@
         "next": 3
       }
     }
-  ]
+  ],
+  "participants": [
+    {
+      "name": "Aisha"
+    },
+    {
+      "name": "Aaron"
+    }
+  ],
+  "functions": [
+    {
+      "name": "ask player name"
+    }
+  ],
+  "variables": {
+    "boolean": [
+      {
+        "name": "Aaron likes you"
+      }
+    ],
+    "string": []
+  }
 }
