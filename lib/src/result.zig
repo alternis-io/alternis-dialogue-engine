@@ -47,8 +47,35 @@ fn ResultDecls(comptime R: type, comptime E: type, comptime Self: type) type {
 
 
     pub fn fmt_err(alloc: std.mem.Allocator, comptime fmt_str: []const u8, fmt_args: anytype) Self {
-      // FIXME: doesn't work on wasm yet anyway
-      const src = @src(); //std.debug.getSelfDebugInfo() catch unreachable;
+      const unknown_src = std.builtin.SourceLocation{ .fn_name = "???", .file = "???", .line = 0, .column = 0 };
+
+      const src = if (builtin.os.tag != .freestanding) _: {
+        const debug_info = std.debug.getSelfDebugInfo() catch unreachable;
+
+        const module = debug_info.getModuleForAddress(@returnAddress()) catch |er| switch (er) {
+            error.MissingDebugInfo, error.InvalidDebugInfo => break :_ unknown_src,
+            else => |e| std.debug.panic("error getting module for address from debug info: {}", .{e}),
+        };
+
+        const symbol_info = module.getSymbolAtAddress(debug_info.allocator, @returnAddress()) catch |er| switch (er) {
+            error.MissingDebugInfo, error.InvalidDebugInfo => break :_ unknown_src,
+            else => |e| std.debug.panic("error getting symbol for at address from debug info: {}", .{e}),
+        };
+        defer symbol_info.deinit(debug_info.allocator);
+
+        break :_ std.builtin.SourceLocation{
+          .line = if (symbol_info.line_info) |li| @intCast(li.line) else unknown_src.line,
+          // FIXME: leaks!
+          .fn_name = alloc.dupeZ(u8, symbol_info.symbol_name)
+            catch |e| std.debug.panic("error copying symbol name: {}", .{e}),
+          .file = if (symbol_info.line_info) |li|
+            alloc.dupeZ(u8, li.file_name)
+              catch |e| std.debug.panic("error copying file name: {}", .{e})
+            else unknown_src.file,
+          .column = if (symbol_info.line_info) |li| @intCast(li.column) else unknown_src.column,
+        };
+      } else @src();
+
       return Self{
         .value = undefined,
         .err = std.fmt.allocPrintZ(
