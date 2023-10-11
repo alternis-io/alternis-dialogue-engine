@@ -72,8 +72,18 @@ const Node = union (enum) {
     nexts: []const Next, // does it make sense for these to be optional?
     /// utf8 assumed (uses externable type)
     texts: Slice(Line),
+    condition: []union (enum) {
+      none,
+      /// if the pointed to variable is locked (false), allowed
+      /// pointer to the backing bool which should be stable
+      locked: *const bool,
+      /// if the pointed to variable is unlocked (true), allowed
+      /// pointer to the backing bool which should be stable
+      unlocked: *const bool,
+    },
   },
   lock: struct {
+    // FIXME: make a pointer into a stable hash map (or slice with an index hashmap)
     boolean_var_name: []const u8,
     next: Next = .{},
   },
@@ -195,8 +205,7 @@ pub const DialogueContext = struct {
       catch |e| { r = Result(DialogueContext).fmt_err(alloc, "{}", .{e}); return r; };
 
     for (dialogue_data.nodes, 0..) |json_node, i| {
-      const maybe_node = json_node.toNode();
-      if (maybe_node) |node| {
+      if (json_node.toNode()) |node| {
         nodes.append(alloc, node)
           catch |e| { r = Result(DialogueContext).fmt_err(alloc, "{}", .{e}); return r; };
 
@@ -223,14 +232,24 @@ pub const DialogueContext = struct {
     var booleans = std.StringHashMap(bool).init(alloc);
     booleans.ensureTotalCapacity(@intCast(dialogue_data.variables.boolean.len))
       catch |e| { r = Result(DialogueContext).fmt_err(alloc, "{}", .{e}); return r; };
+    for (dialogue_data.variables.boolean) |json_var|
+      booleans.put(json_var.name, false)
+        catch |e| std.debug.panic("put memory error: {}", .{e});
 
     var strings = std.StringHashMap([]const u8).init(alloc);
     strings.ensureTotalCapacity(@intCast(dialogue_data.variables.string.len))
       catch |e| { r = Result(DialogueContext).fmt_err(alloc, "{}", .{e}); return r; };
+    for (dialogue_data.variables.string) |json_var|
+      strings.put(json_var.name, "")
+        catch |e| std.debug.panic("put memory error: {}", .{e});
+
 
     var functions = std.StringHashMap(?Callback).init(alloc);
     functions.ensureTotalCapacity(@intCast(dialogue_data.functions.len))
       catch |e| { r = Result(DialogueContext).fmt_err(alloc, "{}", .{e}); return r; };
+    for (dialogue_data.functions) |json_func|
+      functions.put(json_func.name, null)
+        catch |e| std.debug.panic("put memory error: {}", .{e});
 
     const seed = opts.random_seed orelse _: {
       if (builtin.os.tag == .freestanding) {
