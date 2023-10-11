@@ -329,14 +329,18 @@ pub const DialogueContext = struct {
           const shot = self.rand.random().float(f32);
           var acc: u64 = 0;
           for (v.nexts, v.chances) |next, chance_count| {
+            acc += chance_count;
             const chance_proportion = @as(f64, @floatFromInt(acc))
                                     / @as(f64, @floatFromInt(v.total_chances));
             if (shot < chance_proportion) {
               self.current_node_index = next.toOptionalInt(usize);
               break;
             }
-            acc += chance_count;
           }
+
+          // just in case of fp error
+          std.debug.assert(v.nexts.len >= 1);
+          self.current_node_index = v.nexts[v.nexts.len - 1].toOptionalInt(usize);
         },
         .reply => |v| {
           return .{ .tag = .options, .data = .{.options = .{ .texts = v.texts }}};
@@ -510,7 +514,7 @@ test "run large dialogue under zig api" {
     try t.expect(step_result.tag == .line);
     try t.expectEqualStrings("Aisha", step_result.data.line.speaker.toZig());
     try t.expectEqualStrings("Hey", step_result.data.line.text.toZig());
-    try t.expectEqual(@as(?usize, 2), ctx.current_node_index);
+    try t.expectEqual(@as(?usize, 1), ctx.current_node_index);
   }
 
   {
@@ -518,7 +522,7 @@ test "run large dialogue under zig api" {
     try t.expect(step_result.tag == .line);
     try t.expectEqualStrings("Aaron", step_result.data.line.speaker.toZig());
     try t.expectEqualStrings("Yo", step_result.data.line.text.toZig());
-    try t.expectEqual(@as(?usize, 2), ctx.current_node_index);
+    try t.expectEqual(@as(?usize, 3), ctx.current_node_index);
   }
 
   {
@@ -526,7 +530,7 @@ test "run large dialogue under zig api" {
     try t.expect(step_result.tag == .line);
     try t.expectEqualStrings("Aaron", step_result.data.line.speaker.toZig());
     try t.expectEqualStrings("What's your name?", step_result.data.line.text.toZig());
-    try t.expectEqual(@as(?usize, 2), ctx.current_node_index);
+    try t.expectEqual(@as(?usize, 4), ctx.current_node_index);
   }
 
   {
@@ -540,6 +544,6 @@ test "run large dialogue under zig api" {
     try t.expectEqual(@as(usize, 2), step_result.data.options.texts.len);
     try t.expectEqualStrings("It's Testy McTester and I like waffles", step_result.data.options.texts.ptr[0].text.toZig());
     try t.expectEqualStrings("It's Testy McTester", step_result.data.options.texts.ptr[1].text.toZig());
-    try t.expectEqual(@as(?usize, 2), ctx.current_node_index);
+    try t.expectEqual(@as(?usize, 4), ctx.current_node_index);
   }
 }
