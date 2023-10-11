@@ -7,7 +7,6 @@ const Slice = @import("./slice.zig").Slice;
 const OptSlice = @import("./slice.zig").OptSlice;
 const MutSlice = @import("./slice.zig").MutSlice;
 const FileBuffer = @import("./FileBuffer.zig");
-const PageWriter = @import("./PageWriter.zig").PageWriter;
 
 
 // FIXME: only in wasm
