@@ -62,26 +62,55 @@ const RandomSwitch = struct {
   }
 };
 
+const stupid_hack = false;
+// REPORT/FIXME: just pull out the type... zig complained about indexing into an empty slice
+const ConditionType = @TypeOf((Reply{.conditions = &.{.{.locked = &stupid_hack}}}).conditions[0]);
+
+const Reply = struct {
+  nexts: []const Next = &.{}, // does it make sense for these to be optional?
+  /// utf8 assumed (uses externable type)
+  texts: Slice(Line) = .{},
+
+  conditions: []const union (enum) {
+    none,
+    /// if the pointed to variable is locked (false), allowed
+    /// pointer to the backing bool which should be stable
+    locked: *const bool,
+    /// if the pointed to variable is unlocked (true), allowed
+    /// pointer to the backing bool which should be stable
+    unlocked: *const bool,
+  } = &.{},
+
+  fn initFromJson(
+    alloc: std.mem.Allocator,
+    reply_json: ReplyJson,
+    boolean_vars: *std.StringHashMap(bool),
+  ) @This() {
+    // FIXME: leak
+    const conditions = alloc.alloc(ConditionType, reply_json.conditions.len)
+      catch unreachable;
+
+    for (reply_json.conditions, conditions) |json_cond, *self| self.* = switch (json_cond.action) {
+      .none => .none,
+      .locked => .{ .locked = boolean_vars.getPtr(json_cond.variable.?).? },
+      .unlocked => .{ .unlocked = boolean_vars.getPtr(json_cond.variable.?).? },
+    };
+
+    return .{
+      .nexts = reply_json.nexts,
+      .texts = reply_json.texts,
+      .conditions = conditions,
+    };
+  }
+};
+
 const Node = union (enum) {
   line: struct {
     data: Line,
     next: Next = .{},
   },
   random_switch: RandomSwitch,
-  reply: struct {
-    nexts: []const Next, // does it make sense for these to be optional?
-    /// utf8 assumed (uses externable type)
-    texts: Slice(Line),
-    condition: []union (enum) {
-      none,
-      /// if the pointed to variable is locked (false), allowed
-      /// pointer to the backing bool which should be stable
-      locked: *const bool,
-      /// if the pointed to variable is unlocked (true), allowed
-      /// pointer to the backing bool which should be stable
-      unlocked: *const bool,
-    },
-  },
+  reply: Reply,
   lock: struct {
     // FIXME: make a pointer into a stable hash map (or slice with an index hashmap)
     boolean_var_name: []const u8,
@@ -189,7 +218,7 @@ pub const DialogueContext = struct {
     var json_scanner = json.Scanner.initCompleteInput(arena_alloc, json_text);
     json_scanner.enableDiagnostics(&json_diagnostics);
 
-    const dialogue_data = json.parseFromTokenSourceLeaky(DialogueJsonFormat, arena_alloc, &json_scanner, .{
+    const dialogue_data = json.parseFromTokenSourceLeaky(DialogueJson, arena_alloc, &json_scanner, .{
       .ignore_unknown_fields = true,
       .allocate = .alloc_always,
     }) catch |e| { r = Result(DialogueContext).fmt_err(alloc, "{}: {}", .{e, json_diagnostics}); return r; };
@@ -204,8 +233,30 @@ pub const DialogueContext = struct {
     nodes.ensureTotalCapacity(alloc, dialogue_data.nodes.len)
       catch |e| { r = Result(DialogueContext).fmt_err(alloc, "{}", .{e}); return r; };
 
+    var booleans = std.StringHashMap(bool).init(alloc);
+    booleans.ensureTotalCapacity(@intCast(dialogue_data.variables.boolean.len))
+      catch |e| { r = Result(DialogueContext).fmt_err(alloc, "{}", .{e}); return r; };
+    for (dialogue_data.variables.boolean) |json_var|
+      booleans.put(json_var.name, false)
+        catch |e| std.debug.panic("put memory error: {}", .{e});
+
+    var strings = std.StringHashMap([]const u8).init(alloc);
+    strings.ensureTotalCapacity(@intCast(dialogue_data.variables.string.len))
+      catch |e| { r = Result(DialogueContext).fmt_err(alloc, "{}", .{e}); return r; };
+    for (dialogue_data.variables.string) |json_var|
+      strings.put(json_var.name, "")
+        catch |e| std.debug.panic("put memory error: {}", .{e});
+
+
+    var functions = std.StringHashMap(?Callback).init(alloc);
+    functions.ensureTotalCapacity(@intCast(dialogue_data.functions.len))
+      catch |e| { r = Result(DialogueContext).fmt_err(alloc, "{}", .{e}); return r; };
+    for (dialogue_data.functions) |json_func|
+      functions.put(json_func.name, null)
+        catch |e| std.debug.panic("put memory error: {}", .{e});
+
     for (dialogue_data.nodes, 0..) |json_node, i| {
-      if (json_node.toNode()) |node| {
+      if (json_node.toNode(alloc, &booleans)) |node| {
         nodes.append(alloc, node)
           catch |e| { r = Result(DialogueContext).fmt_err(alloc, "{}", .{e}); return r; };
 
@@ -229,27 +280,6 @@ pub const DialogueContext = struct {
       }
     }
 
-    var booleans = std.StringHashMap(bool).init(alloc);
-    booleans.ensureTotalCapacity(@intCast(dialogue_data.variables.boolean.len))
-      catch |e| { r = Result(DialogueContext).fmt_err(alloc, "{}", .{e}); return r; };
-    for (dialogue_data.variables.boolean) |json_var|
-      booleans.put(json_var.name, false)
-        catch |e| std.debug.panic("put memory error: {}", .{e});
-
-    var strings = std.StringHashMap([]const u8).init(alloc);
-    strings.ensureTotalCapacity(@intCast(dialogue_data.variables.string.len))
-      catch |e| { r = Result(DialogueContext).fmt_err(alloc, "{}", .{e}); return r; };
-    for (dialogue_data.variables.string) |json_var|
-      strings.put(json_var.name, "")
-        catch |e| std.debug.panic("put memory error: {}", .{e});
-
-
-    var functions = std.StringHashMap(?Callback).init(alloc);
-    functions.ensureTotalCapacity(@intCast(dialogue_data.functions.len))
-      catch |e| { r = Result(DialogueContext).fmt_err(alloc, "{}", .{e}); return r; };
-    for (dialogue_data.functions) |json_func|
-      functions.put(json_func.name, null)
-        catch |e| std.debug.panic("put memory error: {}", .{e});
 
     const seed = opts.random_seed orelse _: {
       if (builtin.os.tag == .freestanding) {
@@ -387,7 +417,43 @@ pub const DialogueContext = struct {
   }
 };
 
-const DialogueJsonFormat = struct {
+// FIXME: move Json types to separate file
+// FIXME: sanity check during init that the referenced variables exist during
+const ConditionJson = struct {
+  action: enum (u2) {
+    none,
+    locked,
+    unlocked,
+  } = .none,
+
+  /// the name of the variable that the action acts upon
+  variable: ?[]const u8 = null,
+
+  pub fn jsonParse(allocator: std.mem.Allocator, source: anytype, options: json.ParseOptions) !@This() {
+    const value = try json.innerParse(struct {
+      action: []const u8,
+      variable: ?[]const u8 = null,
+    }, allocator, source, options);
+
+    if (std.meta.eql(value.action, "none"))
+      return .{ .action = .none }
+    else if (std.meta.eql(value.action, "locked"))
+      return .{ .action = .locked, .variable = value.variable orelse return error.MissingField }
+    else if (std.meta.eql(value.action, "unlocked"))
+      return .{ .action = .unlocked, .variable = value.variable orelse return error.MissingField }
+    else
+      return error.UnexpectedToken;
+  }
+};
+
+const ReplyJson = struct {
+  nexts: []const Next, // does it make sense for these to be optional?
+  /// uses externable type so it can be pointed to externally
+  texts: Slice(Line),
+  conditions: []const ConditionJson,
+};
+
+const DialogueJson = struct {
   version: usize,
   entryId: usize,
   nodes: []const struct {
@@ -399,15 +465,17 @@ const DialogueJsonFormat = struct {
       nexts: []const Next,
       chances: []const u32,
     } = null,
-    reply: ?@typeInfo(Node).Union.fields[2].type = null,
+    // FIXME: update json schema
+    reply: ?ReplyJson,
     lock: ?@typeInfo(Node).Union.fields[3].type = null,
     unlock: ?@typeInfo(Node).Union.fields[4].type = null,
     call: ?@typeInfo(Node).Union.fields[5].type = null,
 
-    pub fn toNode(self: @This()) ?Node {
+    /// convert from the json node format to the internal format
+    pub fn toNode(self: @This(), alloc: std.mem.Allocator, boolean_vars: *std.StringHashMap(bool)) ?Node {
       if (self.line)          |v| return .{.line = v};
       if (self.random_switch) |v| return .{.random_switch = RandomSwitch.init(v.nexts, v.chances)};
-      if (self.reply)         |v| return .{.reply = v};
+      if (self.reply)         |v| return .{.reply = Reply.initFromJson(alloc, v, boolean_vars)};
       if (self.lock)          |v| return .{.lock = v};
       if (self.unlock)        |v| return .{.unlock = v};
       if (self.call)          |v| return .{.call = v};

@@ -5,8 +5,8 @@ const json = std.json;
 /// extern slice
 pub fn Slice(comptime T: type) type {
     return extern struct {
-        ptr: [*]const T,
-        len: usize,
+        ptr: [*]const T = &[_]T{},
+        len: usize = 0,
 
         pub fn fromZig(slice: []const T) @This() {
             return @This(){ .ptr = slice.ptr, .len = slice.len };
