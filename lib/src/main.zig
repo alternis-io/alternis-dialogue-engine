@@ -354,6 +354,17 @@ pub const DialogueContext = struct {
   }
 
   pub fn deinit(self: *@This(), alloc: std.mem.Allocator) void {
+    // FIXME: nodes should encapsulate their own freeing logic better
+    {
+      // FIXME: probably better to iterate on .data simultaneously
+      const nodes_slice = self.nodes.slice();
+      for (nodes_slice.items(.tags), 0..) |tag, index| {
+        if (tag != .reply) continue;
+        var value = nodes_slice.get(index);
+        alloc.free(value.reply.conditions);
+      }
+    }
+
     // no need to free self.step_result_buffer, it uses the arena
     self.nodes.deinit(alloc);
     alloc.free(self.step_options_buffer.toZig());
