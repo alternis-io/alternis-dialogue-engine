@@ -728,14 +728,6 @@ test "run large dialogue under zig api" {
   {
     const step_result = ctx.step();
     try t.expect(step_result.tag == .function_called);
-  }
-
-  {
-    const step_result = ctx.step();
-    try t.expect(step_result.tag == .options);
-    try t.expectEqual(@as(usize, 2), step_result.data.options.texts.len);
-    try t.expectEqualStrings("It's Testy McTester and I like waffles", step_result.data.options.texts.ptr[0].text.toZig());
-    try t.expectEqualStrings("It's Testy McTester", step_result.data.options.texts.ptr[1].text.toZig());
     try t.expectEqual(@as(?usize, 5), ctx.current_node_index);
   }
 
@@ -743,8 +735,79 @@ test "run large dialogue under zig api" {
     const step_result = ctx.step();
     try t.expect(step_result.tag == .options);
     try t.expectEqual(@as(usize, 2), step_result.data.options.texts.len);
+    try t.expectEqual(@as(usize, 2), step_result.data.options.ids.len);
+    try t.expectEqual(@as(usize, 0), step_result.data.options.ids.toZig()[0]);
+    try t.expectEqual(@as(usize, 1), step_result.data.options.ids.toZig()[1]);
     try t.expectEqualStrings("It's Testy McTester and I like waffles", step_result.data.options.texts.ptr[0].text.toZig());
     try t.expectEqualStrings("It's Testy McTester", step_result.data.options.texts.ptr[1].text.toZig());
     try t.expectEqual(@as(?usize, 5), ctx.current_node_index);
+  }
+
+  // if we don't reply, we get the exact same result
+  {
+    const step_result = ctx.step();
+    try t.expect(step_result.tag == .options);
+    try t.expectEqual(@as(usize, 2), step_result.data.options.texts.len);
+    try t.expectEqual(@as(usize, 2), step_result.data.options.ids.len);
+    try t.expectEqual(@as(usize, 0), step_result.data.options.ids.toZig()[0]);
+    // FIXME: I fail to test gaps in locked options
+    try t.expectEqual(@as(usize, 1), step_result.data.options.ids.toZig()[1]);
+    try t.expectEqualStrings("It's Testy McTester and I like waffles", step_result.data.options.texts.ptr[0].text.toZig());
+    try t.expectEqualStrings("It's Testy McTester", step_result.data.options.texts.ptr[1].text.toZig());
+    try t.expectEqual(@as(?usize, 5), ctx.current_node_index);
+  }
+
+  ctx.reply(1);
+  try t.expectEqual(@as(?usize, 8), ctx.current_node_index);
+
+  {
+    const step_result = ctx.step();
+    try t.expect(step_result.tag == .line);
+    try t.expectEqualStrings("Aaron", step_result.data.line.speaker.toZig());
+    try t.expectEqualStrings("Ok. What was your name again?", step_result.data.line.text.toZig());
+    try t.expectEqual(@as(?usize, 5), ctx.current_node_index);
+  }
+
+  ctx.reply(0);
+  try t.expectEqual(@as(?usize, 6), ctx.current_node_index);
+
+  {
+    const step_result = ctx.step();
+    try t.expect(step_result.tag == .line);
+    try t.expectEqualStrings("Aaron", step_result.data.line.speaker.toZig());
+    try t.expectEqualStrings("You're pretty cool!\nWhat was your name again?", step_result.data.line.text.toZig());
+    try t.expectEqual(@as(?usize, 5), ctx.current_node_index);
+  }
+
+  // now all options should be available
+  {
+    const step_result = ctx.step();
+    try t.expect(step_result.tag == .options);
+    try t.expectEqual(@as(usize, 3), step_result.data.options.texts.len);
+    try t.expectEqual(@as(usize, 3), step_result.data.options.ids.len);
+    try t.expectEqual(@as(usize, 0), step_result.data.options.ids.toZig()[0]);
+    try t.expectEqual(@as(usize, 1), step_result.data.options.ids.toZig()[1]);
+    try t.expectEqual(@as(usize, 2), step_result.data.options.ids.toZig()[2]);
+    try t.expectEqualStrings("It's Testy McTester and I like waffles", step_result.data.options.texts.ptr[0].text.toZig());
+    try t.expectEqualStrings("It's Testy McTester", step_result.data.options.texts.ptr[1].text.toZig());
+    try t.expectEqualStrings("Wanna go eat waffles?", step_result.data.options.texts.ptr[2].text.toZig());
+    try t.expectEqual(@as(?usize, 5), ctx.current_node_index);
+  }
+
+  ctx.reply(2);
+  try t.expectEqual(@as(?usize, 9), ctx.current_node_index);
+
+  {
+    const step_result = ctx.step();
+    try t.expect(step_result.tag == .line);
+    try t.expectEqualStrings("Aaron", step_result.data.line.speaker.toZig());
+    try t.expectEqualStrings("Yeah, Testy McTester.", step_result.data.line.text.toZig());
+    try t.expectEqual(@as(?usize, null), ctx.current_node_index);
+  }
+
+  {
+    const step_result = ctx.step();
+    try t.expect(step_result.tag == .done);
+    try t.expectEqual(@as(?usize, null), ctx.current_node_index);
   }
 }
