@@ -143,7 +143,7 @@ const Node = union (enum) {
 /// A function implemented by the environment
 /// the payload must live as long as the callback is registered
 const Callback = extern struct {
-  function: *const fn(?*anyopaque) void,
+  function: *const fn(?*anyopaque) callconv(.C) void,
   payload: ?*anyopaque = null,
 };
 
@@ -558,10 +558,7 @@ const ConditionJson = struct {
       .{ .action = .locked, .variable = value.variable orelse return error.MissingField }
     else if (std.mem.eql(u8, value.action, "unlocked"))
       .{ .action = .unlocked, .variable = value.variable orelse return error.MissingField }
-    else _: {
-      std.debug.print("{any}, {s}\n", .{value, value.action });
-      break :_ error.UnexpectedToken;
-    };
+    else error.UnexpectedToken;
   }
 };
 

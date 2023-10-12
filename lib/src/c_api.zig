@@ -27,6 +27,7 @@ export fn ade_set_alloc(
     alloc = configured_raw_alloc.?.allocator();
 }
 
+/// the the allocator directly, possible from zig code
 pub fn setZigAlloc(in_alloc: std.mem.Allocator) void {
     alloc = in_alloc;
 }
@@ -60,23 +61,55 @@ export fn ade_dialogue_ctx_create_json(
     return ctx_slot;
 }
 
-export fn ade_dialogue_ctx_destroy(dialogue_ctx: ?*Api.DialogueContext) void {
-    if (dialogue_ctx) |ptr| {
-        ptr.deinit(alloc);
-        alloc.destroy(ptr);
-    }
+export fn ade_dialogue_ctx_destroy(in_dialogue_ctx: ?*Api.DialogueContext) void {
+    const ctx = in_dialogue_ctx orelse return;
+    ctx.deinit(alloc);
+    alloc.destroy(ctx);
 }
 
-export fn ade_dialogue_ctx_reset(dialogue_ctx: ?*Api.DialogueContext) void {
-    if (dialogue_ctx) |ptr| {
-        ptr.reset();
-    }
+export fn ade_dialogue_ctx_reset(in_dialogue_ctx: ?*Api.DialogueContext) void {
+    const ctx = in_dialogue_ctx orelse return;
+    ctx.reset();
 }
 
-export fn ade_dialogue_ctx_reply(dialogue_ctx: ?*Api.DialogueContext, replyId: usize) void {
-    if (dialogue_ctx) |ptr| {
-        ptr.reply(replyId);
-    }
+export fn ade_dialogue_ctx_reply(in_dialogue_ctx: ?*Api.DialogueContext, reply_id: usize) void {
+    const ctx = in_dialogue_ctx orelse return;
+    ctx.reply(reply_id);
+}
+
+/// the passed in pointers must exist as long as this is set
+export fn ade_dialogue_ctx_set_variable_boolean(
+    in_dialogue_ctx: ?*Api.DialogueContext,
+    name: [*]const u8,
+    len: usize,
+    value: bool,
+) void {
+    const ctx = in_dialogue_ctx orelse return;
+    ctx.setVariableBoolean(name[0..len], value);
+}
+
+/// the passed in pointers must exist as long as this is set
+export fn ade_dialogue_ctx_set_variable_string(
+    in_dialogue_ctx: ?*Api.DialogueContext,
+    name: [*]const u8,
+    len: usize,
+    value_ptr: [*]const u8,
+    value_len: usize,
+) void {
+    const ctx = in_dialogue_ctx orelse return;
+    ctx.setVariableString(name[0..len], value_ptr[0..value_len]);
+}
+
+/// the passed in pointers must exist as long as this is set
+export fn ade_dialogue_ctx_set_callback(
+    in_dialogue_ctx: ?*Api.DialogueContext,
+    name: [*]const u8,
+    len: usize,
+    function: *const fn(?*anyopaque) callconv(.C) void,
+    payload: ?*anyopaque,
+) void {
+    const ctx = in_dialogue_ctx orelse return;
+    ctx.setCallback(name[0..len], .{ .function = function, .payload = payload });
 }
 
 const Line = extern struct {

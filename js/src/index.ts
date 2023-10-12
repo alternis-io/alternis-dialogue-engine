@@ -150,19 +150,48 @@ export interface DialogueContext {
   reset(): void;
   reply(replyId: number): void;
 
-  registerCallback(fn: (() => void | Promise<void>)): void;
-  setBooleanVariable(name: string, value: boolean): void;
-  setStringVariable(name: string, value: string): void;
+  setCallback(name: string, fn: (() => void | Promise<void>)): void;
+  setVariableBoolean(name: string, value: boolean): void;
+  setVariableString(name: string, value: string): void;
 
   // TODO: add support for Symbol.dispose
   dispose(): void;
 }
 
 interface NativeModuleExports {
-  ade_dialogue_ctx_create_json(json_ptr: number, json_len: number, random_seed: bigint, err: number): number;
+  ade_dialogue_ctx_create_json(
+    json_ptr: number,
+    json_len: number,
+    random_seed: bigint,
+    no_interpolate: 0 | 1,
+    err: number
+  ): number;
+
   ade_dialogue_ctx_destroy(dialogue_ctx: number): void;
   ade_dialogue_ctx_step(dialogue_ctx: number, result_slot: number): void;
   ade_dialogue_ctx_reset(dialogue_ctx: number): void;
+  ade_dialogue_ctx_reply(dialogue_ctx: number, reply_id: number): void;
+
+  ade_dialogue_ctx_set_variable_boolean(
+    in_dialogue_ctx: number,
+    name: number,
+    len: number,
+    value: 0 | 1,
+  ): void;
+
+  ade_dialogue_ctx_set_variable_string(
+    in_dialogue_ctx: number,
+    name: number,
+    len: number,
+    value_ptr: number,
+    value_len: number,
+  ): void;
+
+  ade_dialogue_ctx_set_callback_js(
+    in_dialogue_ctx: number,
+    name: number,
+    len: number,
+  ): number;
 }
 
 let _nativeModulePromise: Promise<WasmHelper<NativeModuleExports>> | undefined;
@@ -171,10 +200,19 @@ import initWasm from "../node_modules/alternis-wasm/zig-out/lib/alternis.wasm?in
 
 let importsInstance!: WebAssembly.Instance;
 
+const handleToJsFuncMap = new Map<number, () => void>();
+
 async function getNativeLib(): Promise<WasmHelper<NativeModuleExports>> {
   return _nativeModulePromise ??= initWasm({
     env: {
-      _debug_print(ptr: number, len: number) { console.log(unmarshalString(importsInstance as any, ptr, len).value); },
+      _debug_print(ptr: number, len: number) {
+        console.log(unmarshalString(importsInstance as any, ptr, len).value);
+      },
+      _call_js(handle: number) {
+        const jsFunc = handleToJsFuncMap.get(handle);
+        if (jsFunc === undefined) throw Error("no such handle!");
+        jsFunc();
+      }
     }
   }).then(inst => {
     importsInstance = inst;
@@ -182,14 +220,22 @@ async function getNativeLib(): Promise<WasmHelper<NativeModuleExports>> {
   });
 }
 
+interface MakeDialogueContextOpts {
+  /** @default use Math.random() for a random seed */
+  randomSeed?: bigint;
+  /** @default false */
+  noInterpolate?: boolean;
+}
+
 /**
  * @param {string} json - a valid json string in the AlternisDialogueV1 format
  */
-export async function makeDialogueContext(json: string, {
-  randomSeed = 0n,
-} = {}): Promise<DialogueContext> {
+export async function makeDialogueContext(json: string, opts: MakeDialogueContextOpts = {}): Promise<DialogueContext> {
   const nativeLib = await getNativeLib();
   const wasmJsonStr = nativeLib.marshalString(json);
+
+  const randomSeed = opts.randomSeed ?? BigInt(Math.floor(Math.random() * Number.MAX_SAFE_INTEGER));
+  const noInterpolate = (opts.noInterpolate ?? false) ? 1 : 0;
 
   const errSlot = nativeLib._instance.exports.malloc(4); // wasm32 ptr bytesize
   // use a function to defer DataView creation since growth can invalidate the view
@@ -199,8 +245,9 @@ export async function makeDialogueContext(json: string, {
   const stepResultPtr = nativeLib._instance.exports.malloc(DialogueContext.StepResult.byteSize);
   const getStepResultView = () => new DataView(nativeLib._instance.exports.memory.buffer, stepResultPtr);
 
-  const nativeDlgCtx = nativeLib._instance.exports.ade_dialogue_ctx_create_json(wasmJsonStr.ptr, wasmJsonStr.len, randomSeed, errSlot);
+  const nativeDlgCtx = nativeLib._instance.exports.ade_dialogue_ctx_create_json(wasmJsonStr.ptr, wasmJsonStr.len, randomSeed, noInterpolate, errSlot);
   const errPtr = getErrView().getUint32(0, true);
+
   if (errPtr !== 0) {
     const err = nativeLib.ptrToStr(errPtr);
     throw Error(err.value);
@@ -218,29 +265,33 @@ export async function makeDialogueContext(json: string, {
       nativeLib._instance.exports.ade_dialogue_ctx_reset(nativeDlgCtx);
     },
     reply(replyId: number) {
-      nativeLib._instance.exports.ade_dialogue_ctx_reply(nativeDlgCtx);
+      nativeLib._instance.exports.ade_dialogue_ctx_reply(nativeDlgCtx, replyId);
     },
 
-    registerCallback(name, cb) {
+    setCallback(name, cb) {
       let wasmName = stringTable.get(name);
       if (wasmName === undefined) {
         wasmName = nativeLib.marshalString(name);
         stringTable.set(name, wasmName);
       }
-      nativeLib._instance.exports.ade_dialogue_ctx_register_callback(nativeDlgCtx, wasmName.ptr, wasmName.len, value ? 1 : 0);
+      const handle = nativeLib._instance.exports.ade_dialogue_ctx_set_callback_js(nativeDlgCtx, wasmName.ptr, wasmName.len);
+      const INVALID_CALLBACK_HANDLE = 0;
+      if (handle === INVALID_CALLBACK_HANDLE)
+        throw Error("invalid callback handle received, is the dialogue context pointer valid?");
+      handleToJsFuncMap.set(handle, cb);
     },
 
-
-    setBooleanVariable(name, value) {
+    setVariableBoolean(name, value) {
       let wasmName = stringTable.get(name);
       if (wasmName === undefined) {
         wasmName = nativeLib.marshalString(name);
         stringTable.set(name, wasmName);
       }
-      nativeLib._instance.exports.ade_dialogue_ctx_set_boolean_variable(nativeDlgCtx, wasmName.ptr, wasmName.len, value ? 1 : 0);
+
+      nativeLib._instance.exports.ade_dialogue_ctx_set_variable_boolean(nativeDlgCtx, wasmName.ptr, wasmName.len, value ? 1 : 0);
     },
 
-    setStringVariable(name, value) {
+    setVariableString(name, value) {
       let wasmName = stringTable.get(name);
       if (wasmName === undefined) {
         wasmName = nativeLib.marshalString(name);
@@ -252,7 +303,8 @@ export async function makeDialogueContext(json: string, {
         wasmValue = nativeLib.marshalString(value);
         stringTable.set(value, wasmValue);
       }
-      nativeLib._instance.exports.ade_dialogue_ctx_set_string_variable(nativeDlgCtx, wasmName.ptr, wasmName.len, wasmValue.ptr, wasmValue.len);
+
+      nativeLib._instance.exports.ade_dialogue_ctx_set_variable_string(nativeDlgCtx, wasmName.ptr, wasmName.len, wasmValue.ptr, wasmValue.len);
     },
 
     dispose() {

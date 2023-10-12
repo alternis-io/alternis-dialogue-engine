@@ -49,9 +49,9 @@ describe("smoke", () => {
 
     const ctx = await Api.makeDialogueContext(largeTestJson);
 
-    ctx.registerCallback("ask player name", async () => {
+    ctx.setCallback("ask player name", async () => {
       await new Promise(r => setTimeout(r, 50));
-      ctx.setStringVariable("Testy McTester");
+      ctx.setVariableString("name", "Testy McTester");
     });
 
     assert.deepStrictEqual(ctx.step(), {
