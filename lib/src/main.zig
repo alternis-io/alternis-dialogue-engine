@@ -273,9 +273,10 @@ pub const DialogueContext = struct {
     var strings = std.StringHashMap([]const u8).init(alloc);
     strings.ensureTotalCapacity(@intCast(dialogue_data.variables.string.len))
       catch |e| { r = Result(DialogueContext).fmt_err(alloc, "{}", .{e}); return r; };
-    for (dialogue_data.variables.string) |json_var|
+    for (dialogue_data.variables.string) |json_var| {
       strings.put(json_var.name, "")
         catch |e| std.debug.panic("put memory error: {}", .{e});
+    }
 
 
     var functions = std.StringHashMap(?Callback).init(alloc);
@@ -399,10 +400,11 @@ pub const DialogueContext = struct {
 
   /// the passed in "name" is not copied, so a reference to it must remain
   pub fn setVariableBoolean(self: *@This(), name: []const u8, value: bool) void {
-    // FIXME: this is a bug, since ptrs can be invalidated by putting the wrong name.
-    // it should be restricted to the known set of variables (maybe use getPtr instead?)
-    self.variables.booleans.put(name, value)
-      catch |e| std.debug.panic("Put memory error, how did that happen?: {}", .{e});
+    // FIXME: don't panic
+    const var_ptr = self.variables.booleans.getPtr(name)
+      orelse std.debug.panic("no such boolean variable: '{s}'", .{name});
+
+    var_ptr.* = value;
   }
 
   /// the passed in "name" is not copied, so a reference to it must remain.
@@ -412,8 +414,11 @@ pub const DialogueContext = struct {
     const duped = self.arena.allocator().dupe(u8, value)
       catch |e| std.debug.panic("{}", .{e});
 
-    self.variables.strings.put(name, duped)
-      catch |e| std.debug.panic("{}", .{e});
+    // FIXME: don't panic
+    const var_ptr = self.variables.strings.getPtr(name)
+      orelse std.debug.panic("no such string variable: '{s}'", .{name});
+
+    var_ptr.* = duped;
   }
 
   /// if the current node is an options node, choose the reply

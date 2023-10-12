@@ -143,6 +143,10 @@
         "name": "Aaron likes you"
       }
     ],
-    "string": []
+    "string": [
+      {
+        "name": "name"
+      }
+    ]
   }
 }

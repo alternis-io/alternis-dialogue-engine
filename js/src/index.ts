@@ -13,7 +13,7 @@ export namespace DialogueContext {
     export const byteSize = 8;
   }
 
-  // FIXME: need a better name for this
+  // FIXME: need a better name for this, it's Slice(Slice(u8))
   export namespace Strings {
     export function unmarshal(helper: WasmHelper, view: DataView) {
       const result: string[] = [];
