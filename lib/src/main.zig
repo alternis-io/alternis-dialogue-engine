@@ -274,7 +274,7 @@ pub const DialogueContext = struct {
     strings.ensureTotalCapacity(@intCast(dialogue_data.variables.string.len))
       catch |e| { r = Result(DialogueContext).fmt_err(alloc, "{}", .{e}); return r; };
     for (dialogue_data.variables.string) |json_var| {
-      strings.put(json_var.name, "")
+      strings.put(json_var.name, "<UNSET>")
         catch |e| std.debug.panic("put memory error: {}", .{e});
     }
 
