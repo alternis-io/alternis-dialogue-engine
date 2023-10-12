@@ -1,5 +1,6 @@
 import { WasmHelper, WasmStr, makeWasmHelper, unmarshalString } from "./wasm";
 
+// FIXME: move unmarshalling stuff to separate file
 interface Unmarshallable<T> {
   unmarshal(helper: WasmHelper, view: DataView): T;
   byteSize: number;
@@ -148,6 +149,11 @@ export interface DialogueContext {
   step(): DialogueContext.StepResult;
   reset(): void;
   reply(replyId: number): void;
+
+  registerCallback(fn: (() => void | Promise<void>)): void;
+  setBooleanVariable(name: string, value: boolean): void;
+  setStringVariable(name: string, value: string): void;
+
   // TODO: add support for Symbol.dispose
   dispose(): void;
 }
@@ -200,6 +206,9 @@ export async function makeDialogueContext(json: string, {
     throw Error(err.value);
   }
 
+  /** table of js strings already stored in wasm */
+  const stringTable = new Map<string, WasmStr>();
+
   const result: DialogueContext = {
     step() {
       nativeLib._instance.exports.ade_dialogue_ctx_step(nativeDlgCtx, stepResultPtr);
@@ -211,9 +220,46 @@ export async function makeDialogueContext(json: string, {
     reply(replyId: number) {
       nativeLib._instance.exports.ade_dialogue_ctx_reply(nativeDlgCtx);
     },
+
+    registerCallback(name, cb) {
+      let wasmName = stringTable.get(name);
+      if (wasmName === undefined) {
+        wasmName = nativeLib.marshalString(name);
+        stringTable.set(name, wasmName);
+      }
+      nativeLib._instance.exports.ade_dialogue_ctx_register_callback(nativeDlgCtx, wasmName.ptr, wasmName.len, value ? 1 : 0);
+    },
+
+
+    setBooleanVariable(name, value) {
+      let wasmName = stringTable.get(name);
+      if (wasmName === undefined) {
+        wasmName = nativeLib.marshalString(name);
+        stringTable.set(name, wasmName);
+      }
+      nativeLib._instance.exports.ade_dialogue_ctx_set_boolean_variable(nativeDlgCtx, wasmName.ptr, wasmName.len, value ? 1 : 0);
+    },
+
+    setStringVariable(name, value) {
+      let wasmName = stringTable.get(name);
+      if (wasmName === undefined) {
+        wasmName = nativeLib.marshalString(name);
+        stringTable.set(name, wasmName);
+      }
+
+      let wasmValue = stringTable.get(value);
+      if (wasmValue === undefined) {
+        wasmValue = nativeLib.marshalString(value);
+        stringTable.set(value, wasmValue);
+      }
+      nativeLib._instance.exports.ade_dialogue_ctx_set_string_variable(nativeDlgCtx, wasmName.ptr, wasmName.len, wasmValue.ptr, wasmValue.len);
+    },
+
     dispose() {
       nativeLib._instance.exports.free(stepResultPtr, DialogueContext.StepResult.byteSize);
       nativeLib._instance.exports.ade_dialogue_ctx_destroy(nativeDlgCtx);
+      for (const wasmStr of stringTable.values())
+        wasmStr.free();
     },
   };
 
