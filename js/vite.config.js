@@ -12,6 +12,7 @@ export default defineConfig(({ mode }) => ({
   },
   build: {
     minify: false,
+    sourcemap: true,
     lib: {
       entry: {
         alternis: resolve(__dirname, 'src/index.ts'),

@@ -17,12 +17,13 @@ export namespace DialogueContext {
         const len = view.getUint32(4, true);
 
         for (let i = 0; i < len; ++i) {
-          const itemView = new DataView(view.buffer, dataPtr + i * this.byteSize);
+          const itemView = new DataView(view.buffer, dataPtr + i * unmarshaller.byteSize);
           result.push(unmarshaller.unmarshal(helper, itemView));
         }
 
         return result;
       },
+
       byteSize: 8,
     };
   };
@@ -119,13 +120,13 @@ export namespace DialogueContext {
 
       if (tag == Tag.Options) {
         const textsView = new DataView(view.buffer, payloadView.byteOffset + 0);
-        const strings = Slice(StringSlice).unmarshal(helper, textsView);
-        const idsView = new DataView(view.buffer, payloadView.byteOffset + Slice(StringSlice).byteSize);
-        const ids = USizeSlice.unmarshal(helper, textsView) ?? [];
+        const strings = Slice(Line).unmarshal(helper, textsView);
+        const idsView = new DataView(view.buffer, payloadView.byteOffset + Slice(Line).byteSize);
+        const ids = USizeSlice.unmarshal(helper, idsView) ?? [];
 
         return {
           options: strings.map((s, i) => ({
-            text: s!.value,
+            ...s,
             id: ids[i],
           })),
         };
@@ -150,7 +151,8 @@ export interface DialogueContext {
   reset(): void;
   reply(replyId: number): void;
 
-  setCallback(name: string, fn: (() => void | Promise<void>)): void;
+  // TODO: support promises
+  setCallback(name: string, fn: (() => void)): void;
   setVariableBoolean(name: string, value: boolean): void;
   setVariableString(name: string, value: string): void;
 

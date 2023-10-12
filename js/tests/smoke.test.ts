@@ -49,8 +49,7 @@ describe("smoke", () => {
 
     const ctx = await Api.makeDialogueContext(largeTestJson);
 
-    ctx.setCallback("ask player name", async () => {
-      await new Promise(r => setTimeout(r, 50));
+    ctx.setCallback("ask player name", () => {
       ctx.setVariableString("name", "Testy McTester");
     });
 
@@ -83,36 +82,38 @@ describe("smoke", () => {
     });
 
     assert.deepStrictEqual(ctx.step(), {
-      options:  {
-        texts: [
-          {
-            speaker: "Aisha",
-            text: "It's Testy McTester and I like waffles",
-          },
-          {
-            speaker: "Aisha",
-            text: "It's Testy McTester",
-          },
-        ],
-        ids: [0, 1],
-      },
+      options: [
+        {
+          speaker: "Aisha",
+          text: "It's Testy McTester and I like waffles",
+          id: 0,
+          metadata: undefined,
+        },
+        {
+          speaker: "Aisha",
+          text: "It's Testy McTester",
+          id: 1,
+          metadata: undefined,
+        },
+      ],
     });
 
     // if we don't reply, we get the same node
     assert.deepStrictEqual(ctx.step(), {
-      options:  {
-        texts: [
-          {
-            speaker: "Aisha",
-            text: "It's Testy McTester and I like waffles",
-          },
-          {
-            speaker: "Aisha",
-            text: "It's Testy McTester",
-          },
-        ],
-        ids: [0, 1],
-      },
+      options: [
+        {
+          speaker: "Aisha",
+          text: "It's Testy McTester and I like waffles",
+          id: 0,
+          metadata: undefined,
+        },
+        {
+          speaker: "Aisha",
+          text: "It's Testy McTester",
+          id: 1,
+          metadata: undefined,
+        },
+      ],
     });
 
     ctx.reply(1);
@@ -126,19 +127,20 @@ describe("smoke", () => {
     });
 
     assert.deepStrictEqual(ctx.step(), {
-      options:  {
-        texts: [
-          {
-            speaker: "Aisha",
-            text: "It's Testy McTester and I like waffles",
-          },
-          {
-            speaker: "Aisha",
-            text: "It's Testy McTester",
-          },
-        ],
-        ids: [0, 1],
-      },
+      options: [
+        {
+          speaker: "Aisha",
+          text: "It's Testy McTester and I like waffles",
+          id: 0,
+          metadata: undefined,
+        },
+        {
+          speaker: "Aisha",
+          text: "It's Testy McTester",
+          id: 1,
+          metadata: undefined,
+        },
+      ],
     });
 
     ctx.reply(0);
@@ -152,23 +154,26 @@ describe("smoke", () => {
     });
 
     assert.deepStrictEqual(ctx.step(), {
-      options:  {
-        texts: [
-          {
-            speaker: "Aisha",
-            text: "It's Testy McTester and I like waffles",
-          },
-          {
-            speaker: "Aisha",
-            text: "It's Testy McTester",
-          },
-          {
-            speaker: "Aisha",
-            text: "Wanna go eat waffles?",
-          },
-        ],
-        ids: [0, 1, 2],
-      },
+      options: [
+        {
+          speaker: "Aisha",
+          text: "It's Testy McTester and I like waffles",
+          id: 0,
+          metadata: undefined,
+        },
+        {
+          speaker: "Aisha",
+          text: "It's Testy McTester",
+          id: 1,
+          metadata: undefined,
+        },
+        {
+          speaker: "Aisha",
+          text: "Wanna go eat waffles?",
+          id: 2,
+          metadata: undefined,
+        },
+      ],
     });
 
     ctx.reply(2);
