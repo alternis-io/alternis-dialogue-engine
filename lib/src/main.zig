@@ -177,10 +177,13 @@ pub const DialogueContext = struct {
 
   do_interpolate: bool,
 
-  /// buffer for storing the dynamic list of a StepResult .options variant
+  /// buffer for storing the texts of the dynamic list of a StepResult .options variant
   step_options_buffer: MutSlice(Line),
+  /// buffer for storing the ids of the dynamic list of a StepResult .options variant
+  step_option_ids_buffer: MutSlice(usize),
 
   /// step() stores a copy of its result here, so that its contents can be freed between steps
+  /// when using string variable interpolation
   step_result_buffer: ?StepResult = null,
 
   // FIXME: the alignments are stupid large here
@@ -199,6 +202,8 @@ pub const DialogueContext = struct {
       finished: void,
       options: extern struct {
         texts: MutSlice(Line),
+        /// for each option, the corresponding id which must be used when calling @see reply
+        ids: MutSlice(usize),
       },
       line: Line,
       function_called: void,
@@ -207,7 +212,10 @@ pub const DialogueContext = struct {
     pub fn free(self: *@This(), alloc: std.mem.Allocator) void {
       switch (self.tag) {
         .line => self.data.line.free(alloc),
-        .options => { for (self.data.options.texts.toZig()) |*l| l.free(alloc); },
+        .options => {
+          alloc.free(self.data.options.ids.toZig());
+          for (self.data.options.texts.toZig()) |*l| l.free(alloc);
+        },
         else => {}
       }
     }
@@ -310,6 +318,7 @@ pub const DialogueContext = struct {
     }
 
     var step_options_buffer = MutSlice(Line).fromZig(alloc.alloc(Line, max_option_count) catch unreachable);
+    var step_option_ids_buffer = MutSlice(usize).fromZig(alloc.alloc(usize, max_option_count) catch unreachable);
 
     const seed = opts.random_seed orelse _: {
       if (builtin.os.tag == .freestanding) {
@@ -337,6 +346,7 @@ pub const DialogueContext = struct {
       .rand = std.rand.DefaultPrng.init(seed),
       .arena = arena,
       .step_options_buffer = step_options_buffer,
+      .step_option_ids_buffer = step_option_ids_buffer,
       .do_interpolate = !opts.no_interpolate,
     });
 
@@ -347,6 +357,7 @@ pub const DialogueContext = struct {
     // no need to free self.step_result_buffer, it uses the arena
     self.nodes.deinit(alloc);
     alloc.free(self.step_options_buffer.toZig());
+    alloc.free(self.step_option_ids_buffer.toZig());
     self.functions.deinit();
     // NOTE: keys and string values are in the arena
     self.variables.booleans.deinit();
@@ -449,9 +460,10 @@ pub const DialogueContext = struct {
         },
         .reply => |v| {
           std.debug.assert(v.texts.len <= self.step_options_buffer.len);
+          std.debug.assert(v.texts.len <= self.step_option_ids_buffer.len);
 
           var slot_index: usize = 0;
-          for (v.texts.toZig(), v.conditions) |text, cond| {
+          for (v.texts.toZig(), v.conditions, 0..) |text, cond, index| {
             switch (cond) {
               .locked => |bool_ptr| {
                 const is_locked = !bool_ptr.*;
@@ -468,6 +480,9 @@ pub const DialogueContext = struct {
               = if (self.do_interpolate)
                   text.interpolate(self.arena.allocator(), &self.variables.strings)
                 else text;
+
+            self.step_option_ids_buffer.toZig()[slot_index] = index;
+
             slot_index += 1;
           }
 
@@ -475,6 +490,7 @@ pub const DialogueContext = struct {
             .tag = .options,
             .data = .{ .options = .{
               .texts = MutSlice(Line).fromZig(self.step_options_buffer.toZig()[0..slot_index]),
+              .ids = MutSlice(usize).fromZig(self.step_option_ids_buffer.toZig()[0..slot_index]),
             }}
           };
           return result;
@@ -712,6 +728,15 @@ test "run large dialogue under zig api" {
   {
     const step_result = ctx.step();
     try t.expect(step_result.tag == .function_called);
+  }
+
+  {
+    const step_result = ctx.step();
+    try t.expect(step_result.tag == .options);
+    try t.expectEqual(@as(usize, 2), step_result.data.options.texts.len);
+    try t.expectEqualStrings("It's Testy McTester and I like waffles", step_result.data.options.texts.ptr[0].text.toZig());
+    try t.expectEqualStrings("It's Testy McTester", step_result.data.options.texts.ptr[1].text.toZig());
+    try t.expectEqual(@as(?usize, 5), ctx.current_node_index);
   }
 
   {
