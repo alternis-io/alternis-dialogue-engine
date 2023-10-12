@@ -278,7 +278,6 @@ pub const DialogueContext = struct {
         catch |e| std.debug.panic("put memory error: {}", .{e});
     }
 
-
     var functions = std.StringHashMap(?Callback).init(alloc);
     functions.ensureTotalCapacity(@intCast(dialogue_data.functions.len))
       catch |e| { r = Result(DialogueContext).fmt_err(alloc, "{}", .{e}); return r; };
@@ -781,6 +780,19 @@ test "run large dialogue under zig api" {
     try t.expect(step_result.tag == .line);
     try t.expectEqualStrings("Aaron", step_result.data.line.speaker.toZig());
     try t.expectEqualStrings("Ok. What was your name again?", step_result.data.line.text.toZig());
+    try t.expectEqual(@as(?usize, 5), ctx.current_node_index);
+  }
+
+  {
+    const step_result = ctx.step();
+    try t.expect(step_result.tag == .options);
+    try t.expectEqual(@as(usize, 2), step_result.data.options.texts.len);
+    try t.expectEqual(@as(usize, 2), step_result.data.options.ids.len);
+    try t.expectEqual(@as(usize, 0), step_result.data.options.ids.toZig()[0]);
+    // FIXME: I fail to test gaps in locked options
+    try t.expectEqual(@as(usize, 1), step_result.data.options.ids.toZig()[1]);
+    try t.expectEqualStrings("It's Testy McTester and I like waffles", step_result.data.options.texts.ptr[0].text.toZig());
+    try t.expectEqualStrings("It's Testy McTester", step_result.data.options.texts.ptr[1].text.toZig());
     try t.expectEqual(@as(?usize, 5), ctx.current_node_index);
   }
 
