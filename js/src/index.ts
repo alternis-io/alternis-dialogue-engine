@@ -68,20 +68,22 @@ export namespace DialogueContext {
   export type StepResult =
     | { line: Line }
     | { options: Option[] }
-    | { none: true }
+    | { done: true }
+    | { functionCalled: true }
 
   // FIXME: generate this code
   export namespace StepResult {
     export enum Tag {
-      None = 0,
+      Done = 0,
       Options = 1,
       Line = 2,
+      FunctionCalled = 3,
     }
 
     export function unmarshal(helper: WasmHelper, view: DataView): StepResult {
       const tag = view.getUint8(0);
-      if (tag == Tag.None)
-        return { none: true };
+      if (tag == Tag.Done)
+        return { done: true };
 
       // next field should be padded over to next 4-byte alignment boundary
       const payloadView = new DataView(view.buffer, view.byteOffset + 4, view.byteLength - 4);
@@ -96,6 +98,9 @@ export namespace DialogueContext {
 
       if (tag == Tag.Line)
         return { line: Line.unmarshal(helper, payloadView) };
+
+      if (tag == Tag.FunctionCalled)
+        return { functionCalled: true };
 
       throw Error("unreachable; unknown tag while unmarshalling StepResult")
     }

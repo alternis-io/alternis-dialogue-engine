@@ -34,7 +34,7 @@ describe("smoke", () => {
 
     const step_result_3 = ctx.step();
     assert.deepStrictEqual(step_result_3, {
-      none: true,
+      done: true,
     });
 
     ctx.dispose();
@@ -63,7 +63,7 @@ describe("smoke", () => {
 
     const step_result_3 = await ctx.step();
     assert.deepStrictEqual(step_result_3, {
-      none: true,
+      done: true,
     });
 
     await ctx.dispose();
