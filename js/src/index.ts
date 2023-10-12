@@ -1,8 +1,33 @@
-import { WasmHelper, makeWasmHelper, unmarshalString } from "./wasm";
+import { WasmHelper, WasmStr, makeWasmHelper, unmarshalString } from "./wasm";
+
+interface Unmarshallable<T> {
+  unmarshal(helper: WasmHelper, view: DataView): T;
+  byteSize: number;
+}
 
 export namespace DialogueContext {
-  export namespace Slice {
-    export function unmarshal(helper: WasmHelper, view: DataView) {
+  const Slice = <T,>(unmarshaller: Unmarshallable<T>) => {
+    return {
+      unmarshal(helper: WasmHelper, view: DataView) {
+        const result: T[] = [];
+
+        const dataPtr = view.getUint32(0, true);
+        if (dataPtr === 0) return [];
+        const len = view.getUint32(4, true);
+
+        for (let i = 0; i < len; ++i) {
+          const itemView = new DataView(view.buffer, dataPtr + i * this.byteSize);
+          result.push(unmarshaller.unmarshal(helper, itemView));
+        }
+
+        return result;
+      },
+      byteSize: 8,
+    };
+  };
+
+  export namespace StringSlice {
+    export function unmarshal(helper: WasmHelper, view: DataView): WasmStr | undefined {
       // FIXME: support wasm64
       const dataPtr = view.getUint32(0, true);
       if (dataPtr === 0) return undefined;
@@ -13,18 +38,20 @@ export namespace DialogueContext {
     export const byteSize = 8;
   }
 
-  // FIXME: need a better name for this, it's Slice(Slice(u8))
-  export namespace Strings {
-    export function unmarshal(helper: WasmHelper, view: DataView) {
-      const result: string[] = [];
-
+  export namespace USizeSlice {
+    export function unmarshal(_helper: WasmHelper, view: DataView): number[] | undefined {
+      // FIXME: support wasm64
       const dataPtr = view.getUint32(0, true);
-      if (dataPtr === 0) return [];
+      if (dataPtr === 0) return undefined;
       const len = view.getUint32(4, true);
 
+      const result: number[] = [];
+
+      const usizeByteSize = 4;
       for (let i = 0; i < len; ++i) {
-        const itemView = new DataView(view.buffer, dataPtr + i * Slice.byteSize);
-        result.push(Slice.unmarshal(helper, itemView)!.value);
+        // FIXME: technically would be faster to not keep creating new data views
+        const itemView = new DataView(view.buffer, dataPtr + i * usizeByteSize);
+        result.push(itemView.getUint32(0, true));
       }
 
       return result;
@@ -41,14 +68,14 @@ export namespace DialogueContext {
 
   export namespace Line {
     export function unmarshal(helper: WasmHelper, view: DataView): Line {
-      const speakerView = new DataView(view.buffer, view.byteOffset + 0);
-      const speaker = Slice.unmarshal(helper, speakerView);
+      const speakerView = new DataView(view.buffer, view.byteOffset + 0 * StringSlice.byteSize);
+      const speaker = StringSlice.unmarshal(helper, speakerView);
       if (speaker === undefined) throw Error("speaker was null");
-      const textView = new DataView(view.buffer, view.byteOffset + 8);
-      const text = Slice.unmarshal(helper, textView)
+      const textView = new DataView(view.buffer, view.byteOffset + 1 * StringSlice.byteSize);
+      const text = StringSlice.unmarshal(helper, textView)
       if (text === undefined) throw Error("text was null");
-      const metadataView = new DataView(view.buffer, view.byteOffset + 16);
-      const metadata = Slice.unmarshal(helper, metadataView)
+      const metadataView = new DataView(view.buffer, view.byteOffset + 2 * StringSlice.byteSize);
+      const metadata = StringSlice.unmarshal(helper, metadataView)
 
 
       return {
@@ -58,10 +85,11 @@ export namespace DialogueContext {
       };
     }
 
-    export const byteSize = 24;
+    export const byteSize = 3 * StringSlice.byteSize;
   }
 
   export interface Option {
+    id: number,
     text: string,
   }
 
@@ -90,10 +118,16 @@ export namespace DialogueContext {
 
       if (tag == Tag.Options) {
         const textsView = new DataView(view.buffer, payloadView.byteOffset + 0);
-        const strings = Strings.unmarshal(helper, textsView)
-          .map(s => ({ text: s }));
+        const strings = Slice(StringSlice).unmarshal(helper, textsView);
+        const idsView = new DataView(view.buffer, payloadView.byteOffset + Slice(StringSlice).byteSize);
+        const ids = USizeSlice.unmarshal(helper, textsView) ?? [];
 
-        return { options: strings };
+        return {
+          options: strings.map((s, i) => ({
+            text: s!.value,
+            id: ids[i],
+          })),
+        };
       }
 
       if (tag == Tag.Line)
