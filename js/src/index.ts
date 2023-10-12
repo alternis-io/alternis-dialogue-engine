@@ -260,8 +260,12 @@ export async function makeDialogueContext(json: string, opts: MakeDialogueContex
 
   const result: DialogueContext = {
     step() {
-      nativeLib._instance.exports.ade_dialogue_ctx_step(nativeDlgCtx, stepResultPtr);
-      return DialogueContext.StepResult.unmarshal(nativeLib, getStepResultView());
+      let stepResult: DialogueContext.StepResult;
+      do {
+        nativeLib._instance.exports.ade_dialogue_ctx_step(nativeDlgCtx, stepResultPtr);
+        stepResult = DialogueContext.StepResult.unmarshal(nativeLib, getStepResultView());
+      } while ("functionCalled" in stepResult);
+      return stepResult;
     },
     reset() {
       nativeLib._instance.exports.ade_dialogue_ctx_reset(nativeDlgCtx);
