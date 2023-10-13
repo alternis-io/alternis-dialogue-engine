@@ -5,26 +5,26 @@ import sys
 env = SConscript("godot-cpp/SConstruct")
 
 # FIXME: on ubuntu I get an error that I can't link the static (or shared!) library
-# without this, even though it should be fine with -fPIC, (e.g. gcc handles it)
+# without this, even though it should be fine with -fPIC
 env["STATIC_AND_SHARED_OBJECTS_ARE_THE_SAME"] = '1'
 
-env.Append(CPPPATH=["src/"])
-sources = Glob("src/*.cpp")
-
 # HACK: for some reason scons doesn't detect this as shared
-alternis_dep = "../../lib/zig-out/lib/libalternis.a"
+alternis_dep = "../../lib/zig-out/lib/libalternis.so"
+
+env.Append(CPPPATH=["src/"])
+sources = Glob("src/*.cpp") + [alternis_dep]
 
 if env["platform"] == "macos":
     library = env.SharedLibrary(
-        "demo/bin/libalternis-godot.{}.{}.framework/libalternis-godot.{}.{}".format(
+        "lib/libalternis-godot.{}.{}.framework/libalternis-godot.{}.{}".format(
             env["platform"], env["target"], env["platform"], env["target"]
         ),
-        source=sources + [alternis_dep],
+        source=sources,
     )
 else:
     library = env.SharedLibrary(
-        "demo/bin/libalternis-godot{}{}".format(env["suffix"], env["SHLIBSUFFIX"]),
-        source=sources + [alternis_dep],
+        "lib/libalternis-godot{}{}".format(env["suffix"], env["SHLIBSUFFIX"]),
+        source=sources,
     )
 
 Default(library)

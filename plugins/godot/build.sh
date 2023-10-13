@@ -14,5 +14,6 @@ pushd $SCRIPT_DIR/godot-cpp
 scons platform=linux -j8 custom_api_file=../thirdparty/godot/extension_api.json bits=64
 popd
 
-scons platform=linux
+# build our bindings
+scons platform=linux target=template_release debug_symbols=no
 
