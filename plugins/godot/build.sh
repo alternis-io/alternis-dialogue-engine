@@ -11,6 +11,9 @@ popd
 
 # build godot-cpp (c++ bindings) dependency
 pushd $SCRIPT_DIR/godot-cpp
+# FIXME: check if parallelism is automatic
 scons platform=linux -j8 custom_api_file=../thirdparty/godot/extension_api.json bits=64
 popd
+
+scons platform=linux
 

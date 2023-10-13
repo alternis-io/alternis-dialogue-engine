@@ -1,5 +1,8 @@
 # scons
 .sconsign.dblite
 
+# build output
+demo/bin/*
+
 # generated godot api
 thirdparty/godot/*

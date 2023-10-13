@@ -15,10 +15,9 @@ public:
 	AlternisDialogue();
 	~AlternisDialogue();
 
-	//void _process(double delta);
-  void reset();
-  void step();
-  void reply();
+    void reset();
+    void step();
+    void reply();
 };
 
 }
