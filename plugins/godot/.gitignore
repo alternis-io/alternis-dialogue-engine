@@ -1,6 +1,0 @@
-# generated godot bindings
-thirdparty/godot/*
-
-# zig
-zig-out
-zig-cache
