@@ -199,7 +199,7 @@ pub const DialogueContext = struct {
 
     /// data for each field
     data: extern union {
-      finished: void,
+      done: void,
       options: extern struct {
         texts: MutSlice(Line),
         /// for each option, the corresponding id which must be used when calling @see reply
