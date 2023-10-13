@@ -58,6 +58,7 @@ DialogueContext* ade_dialogue_ctx_create_json(
 
 void ade_dialogue_ctx_destroy(DialogueContext* ctx);
 void ade_dialogue_ctx_reset(DialogueContext* ctx);
+void ade_dialogue_ctx_reply(DialogueContext* ctx, size_t reply_id);
 
 size_t ade_dialogue_ctx_set_callback(
     DialogueContext* ctx,
