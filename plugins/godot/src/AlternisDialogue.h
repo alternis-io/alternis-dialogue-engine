@@ -2,6 +2,7 @@
 #define ALTERNIS_DIALOGUE_H
 
 #include <godot_cpp/classes/node.hpp>
+//#include <alternis.hpp>
 
 namespace godot {
 

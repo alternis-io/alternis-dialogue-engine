@@ -10,20 +10,27 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    lib.force_pic = true;
     b.installArtifact(lib);
 
-    const test_filter = b.option([]const u8, "test-filter", "filter for test subcommand");
+    const shared_lib = b.addSharedLibrary(.{
+        .name = "alternis",
+        .root_source_file = .{ .path = "src/c_api.zig" },
+        .target = target,
+        .optimize = optimize,
+    });
+    shared_lib.force_pic = true;
+    b.installArtifact(shared_lib);
 
-    // Creates a step for unit testing. This only builds the test executable
-    // but does not run it.
+
+    const test_filter = b.option([]const u8, "test-filter", "filter for test subcommand");
     const main_tests = b.addTest(.{
         .root_source_file = .{ .path = "src/c_api.zig" },
         .target = target,
         .optimize = optimize,
         .filter = test_filter
     });
-    main_tests.linkLibC(); // tests use libc malloc as the user configured allocator
-
+    main_tests.linkLibC(); // c api tests use libc malloc as the user configured allocator
     const run_main_tests = b.addRunArtifact(main_tests);
 
     const test_step = b.step("test", "Run library tests");

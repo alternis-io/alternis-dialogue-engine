@@ -23,5 +23,4 @@ android.debug.arm64 = "res://bin/libalternis-demo.android.template_debug.arm64.s
 android.release.arm64 = "res://bin/libalternis-demo.android.template_release.arm64.so"
 
 [icon]
-
 alternis = "res://alternis-icon.svg"

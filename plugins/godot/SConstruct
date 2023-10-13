@@ -4,20 +4,27 @@ import sys
 
 env = SConscript("godot-cpp/SConstruct")
 
+# FIXME: on ubuntu I get an error that I can't link the static (or shared!) library
+# without this, even though it should be fine with -fPIC, (e.g. gcc handles it)
+env["STATIC_AND_SHARED_OBJECTS_ARE_THE_SAME"] = '1'
+
 env.Append(CPPPATH=["src/"])
 sources = Glob("src/*.cpp")
+
+# HACK: for some reason scons doesn't detect this as shared
+alternis_dep = "../../lib/zig-out/lib/libalternis.a"
 
 if env["platform"] == "macos":
     library = env.SharedLibrary(
         "demo/bin/libalternis-godot.{}.{}.framework/libalternis-godot.{}.{}".format(
             env["platform"], env["target"], env["platform"], env["target"]
         ),
-        source=sources,
+        source=sources + [alternis_dep],
     )
 else:
     library = env.SharedLibrary(
         "demo/bin/libalternis-godot{}{}".format(env["suffix"], env["SHLIBSUFFIX"]),
-        source=sources,
+        source=sources + [alternis_dep],
     )
 
 Default(library)

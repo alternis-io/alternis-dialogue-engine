@@ -1,5 +1,6 @@
 # scons
 .sconsign.dblite
+*.os
 
 # build output
 demo/bin/*
