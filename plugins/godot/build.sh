@@ -6,7 +6,6 @@ SCRIPT_DIR="$(dirname "$0")"
 mkdir -p $SCRIPT_DIR/thirdparty/godot
 pushd $SCRIPT_DIR/thirdparty/godot
 # generate json and headers
-$GODOT_BIN --dump-extension-api --dump-gd-extension-interface --headless
+$GODOT_BIN --dump-extension-api --dump-gdextension-interface --headless
 popd
-
 
