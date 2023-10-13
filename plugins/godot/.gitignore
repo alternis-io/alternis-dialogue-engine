@@ -1,0 +1,5 @@
+# scons
+.sconsign.dblite
+
+# generated godot api
+thirdparty/godot/*
