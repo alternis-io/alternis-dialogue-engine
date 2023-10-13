@@ -19,3 +19,12 @@ AlternisDialogue::AlternisDialogue() {
 AlternisDialogue::~AlternisDialogue() {
 	// Add your cleanup here.
 }
+
+void AlternisDialogue::step() {
+}
+
+void AlternisDialogue::reset() {
+}
+
+void AlternisDialogue::reply() {
+}

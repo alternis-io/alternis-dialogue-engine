@@ -3,7 +3,12 @@
 *.os
 
 # build output
-demo/bin/*
+lib/*
+!lib/alternis-icon.svg
+!lib/alternis.gdextension
+
+# godot demo generated stuff
+*.import
 
 # generated godot api
 thirdparty/godot/*
