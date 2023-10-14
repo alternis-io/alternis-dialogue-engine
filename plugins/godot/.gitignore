@@ -9,6 +9,7 @@ lib/*
 
 # godot demo generated stuff
 *.import
+.mono
 
 # generated godot api
 thirdparty/godot/*

@@ -11,19 +11,19 @@
 namespace godot {
 
 class AlternisDialogue : public Node {
-	GDCLASS(AlternisDialogue, Node)
+    GDCLASS(AlternisDialogue, Node)
     String resource_path;
-    DialogueContext* ade_ctx;
+    DialogueContext* ade_ctx = nullptr;
     // if 0, clock will be used
-    uint64_t random_seed;
+    uint64_t random_seed = 0;
     bool interpolate = true;
 
 protected:
-	static void _bind_methods();
+    static void _bind_methods();
 
 public:
-	AlternisDialogue();
-	~AlternisDialogue();
+    AlternisDialogue();
+    ~AlternisDialogue();
 
     virtual void _ready() override;
 

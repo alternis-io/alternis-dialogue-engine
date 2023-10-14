@@ -17,8 +17,15 @@ using namespace godot;
 
 void AlternisDialogue::_bind_methods() {
     ClassDB::bind_method(D_METHOD("reset"), &AlternisDialogue::reset);
-    ClassDB::bind_method(D_METHOD("reply"), &AlternisDialogue::reply);
+    ClassDB::bind_method(D_METHOD("reply", "replyId"), &AlternisDialogue::reply);
     ClassDB::bind_method(D_METHOD("step"), &AlternisDialogue::step);
+
+    ClassDB::bind_method(D_METHOD("get_resource_path"), &AlternisDialogue::get_resource_path);
+    ClassDB::bind_method(D_METHOD("set_resource_path", "resource_path"), &AlternisDialogue::set_resource_path);
+    ClassDB::bind_method(D_METHOD("get_interpolate"), &AlternisDialogue::get_interpolate);
+    ClassDB::bind_method(D_METHOD("set_interpolate", "interpolate"), &AlternisDialogue::set_interpolate);
+    ClassDB::bind_method(D_METHOD("get_random_seed"), &AlternisDialogue::get_random_seed);
+    ClassDB::bind_method(D_METHOD("set_random_seed", "random_seed"), &AlternisDialogue::set_random_seed);
 
     ClassDB::add_property("AlternisDialogue",
                           PropertyInfo(Variant::STRING, "alternis_json", PROPERTY_HINT_FILE, "json"),
@@ -44,7 +51,12 @@ void AlternisDialogue::_bind_methods() {
                           PropertyInfo(Variant::STRING, "text")));
 }
 
-AlternisDialogue::AlternisDialogue() {
+AlternisDialogue::AlternisDialogue()
+    : ade_ctx(nullptr)
+    , resource_path("")
+    , random_seed(0)
+    , interpolate(true)
+{
 }
 
 AlternisDialogue::~AlternisDialogue() {
@@ -52,59 +64,59 @@ AlternisDialogue::~AlternisDialogue() {
 }
 
 void AlternisDialogue::_ready() {
-    #ifdef __linux
-        const int fd = open(this->resource_path.utf8().get_data(), O_RDONLY);
-        if (fd == -1) {
-            printf("alternis: no such file: '%s'", this->resource_path.utf8().get_data());
-            return;
-        }
-        struct stat file_stat;
-        if (fstat(fd, &file_stat) == -1) {
-            printf("alternis: file stat on '%s' failed", this->resource_path.utf8().get_data());
-            return;
-        }
-        const size_t file_len = file_stat.st_size;
-        char* file_ptr = static_cast<char*>(mmap(NULL, file_len, PROT_READ, MAP_PRIVATE, fd, 0));
-        if (file_ptr == MAP_FAILED) {
-            printf("alternis: file stat on '%s' failed", this->resource_path.utf8().get_data());
-            return;
-        }
-    #endif
-    #ifdef WIN32
-        // FIXME: not implemented
-    #endif
+#ifdef __linux
+    const int fd = open(this->resource_path.utf8().get_data(), O_RDONLY);
+    if (fd == -1) {
+        printf("alternis: no such file: '%s'", this->resource_path.utf8().get_data());
+        return;
+    }
+    struct stat file_stat;
+    if (fstat(fd, &file_stat) == -1) {
+        printf("alternis: file stat on '%s' failed", this->resource_path.utf8().get_data());
+        return;
+    }
+    const size_t file_len = file_stat.st_size;
+    char* file_ptr = static_cast<char*>(mmap(NULL, file_len, PROT_READ, MAP_PRIVATE, fd, 0));
+    if (file_ptr == MAP_FAILED) {
+        printf("alternis: file stat on '%s' failed", this->resource_path.utf8().get_data());
+        return;
+    }
+#endif
+#ifdef WIN32
+    // FIXME: not implemented
+#endif
 
     random_seed = this->random_seed == 0 ? random() : this->random_seed;
 
     const char* errPtr = nullptr;
 
     this->ade_ctx = ade_dialogue_ctx_create_json(
-        file_ptr,
-        file_len,
-        random_seed,
-        !this->interpolate,
-        &errPtr
-    );
+            file_ptr,
+            file_len,
+            random_seed,
+            !this->interpolate,
+            &errPtr
+        );
 
     if (errPtr != nullptr) {
         // FIXME: need to free the error
         printf("alternis: init error '%s'", this->resource_path.utf8().get_data());
     }
 
-    #ifdef __linux
-        close(fd);
-        if (close(fd) == -1) {
-            printf("alternis: closing '%s' failed", this->resource_path.utf8().get_data());
-            return;
-        }
-        if (munmap(file_ptr, file_len) == -1) {
-            printf("alternis: munmap of '%s' failed", this->resource_path.utf8().get_data());
-            return;
-        }
-    #endif
-    #ifdef WIN32
-        // FIXME: not implemented
-    #endif
+#ifdef __linux
+    close(fd);
+    if (close(fd) == -1) {
+        printf("alternis: closing '%s' failed", this->resource_path.utf8().get_data());
+        return;
+    }
+    if (munmap(file_ptr, file_len) == -1) {
+        printf("alternis: munmap of '%s' failed", this->resource_path.utf8().get_data());
+        return;
+    }
+#endif
+#ifdef WIN32
+    // FIXME: not implemented
+#endif
 }
 
 static Dictionary stepResultToDict(StepResult stepResult) {

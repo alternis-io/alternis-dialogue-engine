@@ -23,4 +23,4 @@ android.debug.arm64 = "res://lib/libalternis-godot.android.template_debug.arm64.
 android.release.arm64 = "res://lib/libalternis-godot.android.template_release.arm64.so"
 
 [icons]
-alternis = "res://alternis-icon.svg"
+alternis = "res://lib/alternis-icon.svg"
