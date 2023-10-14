@@ -27,14 +27,14 @@ public:
 
     virtual void _ready() override;
 
-    void set_resource_path(const String& path);
-    String get_resource_path() const;
+    void set_resource_path(const String path);
+    String get_resource_path();
 
-    void set_random_seed(uint64_t value);
-    uint64_t get_random_seed() const;
+    void set_random_seed(const uint64_t value);
+    uint64_t get_random_seed();
 
-    void set_interpolate(bool value);
-    bool get_interpolate() const;
+    void set_interpolate(const bool value);
+    bool get_interpolate();
 
     void reset();
     Dictionary step();

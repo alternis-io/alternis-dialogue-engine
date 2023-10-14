@@ -1,4 +1,3 @@
-#include <stdlib.h>
 #include "AlternisDialogue.h"
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/variant/string.hpp>
@@ -23,18 +22,18 @@ void AlternisDialogue::_bind_methods() {
 
     ClassDB::add_property("AlternisDialogue",
                           PropertyInfo(Variant::STRING, "alternis_json", PROPERTY_HINT_FILE, "json"),
-                          "set_resource",
-                          "get_resource");
+                          "set_resource_path",
+                          "get_resource_path");
 
     ClassDB::add_property("AlternisDialogue",
                           PropertyInfo(Variant::INT, "random_seed"),
-                          "get_random_seed",
-                          "set_random_seed");
+                          "set_random_seed",
+                          "get_random_seed");
 
     ClassDB::add_property("AlternisDialogue",
                           PropertyInfo(Variant::BOOL, "interpolate"),
-                          "get_interpolate",
-                          "set_interpolate");
+                          "set_interpolate",
+                          "get_interpolate");
 
     ADD_SIGNAL(MethodInfo("dialogue_stepped",
                           PropertyInfo(Variant::OBJECT, "self"),
@@ -181,11 +180,12 @@ void AlternisDialogue::reply(size_t replyId) {
     ade_dialogue_ctx_reply(this->ade_ctx, replyId);
 }
 
-void AlternisDialogue::set_resource_path(const String& value) { this->resource_path = value; }
-String AlternisDialogue::get_resource_path() const { return this->resource_path; }
+// FIXME: can this be made void?
+void AlternisDialogue::set_resource_path(const String value) { this->resource_path = value; }
+String AlternisDialogue::get_resource_path() { return this->resource_path; }
 
-void AlternisDialogue::set_random_seed(uint64_t value) { this->random_seed = value; }
-uint64_t AlternisDialogue::get_random_seed() const { return this->random_seed; }
+void AlternisDialogue::set_random_seed(const uint64_t value) { this->random_seed = value; }
+uint64_t AlternisDialogue::get_random_seed() { return this->random_seed; }
 
-void AlternisDialogue::set_interpolate(bool value) { this->interpolate = value; }
-bool AlternisDialogue::get_interpolate() const { return this->interpolate; }
+void AlternisDialogue::set_interpolate(const bool value) { this->interpolate = value; }
+bool AlternisDialogue::get_interpolate() { return this->interpolate; }

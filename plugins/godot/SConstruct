@@ -13,6 +13,8 @@ alternis_dep = "../../lib/zig-out/lib/libalternis.a"
 env.Append(CPPPATH=["src/", "../../lib/headers-gen"])
 sources = Glob("src/*.cpp") + [alternis_dep]
 
+env.Append(LIBS=['c'])
+
 if env["platform"] == "macos":
     library = env.SharedLibrary(
         "lib/libalternis-godot.{}.{}.framework/libalternis-godot.{}.{}".format(

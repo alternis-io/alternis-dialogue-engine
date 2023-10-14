@@ -11,6 +11,9 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     lib.force_pic = true;
+    // FIXME: avoid doing this except for the godot case,
+    // otherwise roundq is undefined reference when linked into the gdextension
+    lib.bundle_compiler_rt = true;
     b.installArtifact(lib);
 
     const shared_lib = b.addSharedLibrary(.{

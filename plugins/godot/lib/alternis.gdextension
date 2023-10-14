@@ -24,6 +24,3 @@ android.release.arm64 = "res://lib/libalternis-godot.android.template_release.ar
 
 [icons]
 alternis = "res://alternis-icon.svg"
-
-[dependencies]
-alternis = "res://lib/libalternis.so"

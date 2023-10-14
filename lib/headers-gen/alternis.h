@@ -1,6 +1,10 @@
 // not currently generated, that will/should be a zig feature. We should consider contributing it
 
-#include <cstdint> // for uint64_t
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#include <stdint.h> // for uint64_t
 #include <stddef.h> // for size_t
 
 typedef unsigned char zigbool; // extern bool as defined by zig
@@ -84,3 +88,7 @@ void ade_dialogue_ctx_set_variable_string(
 );
 
 void ade_dialogue_ctx_step(DialogueContext* ctx, StepResult* return_val);
+
+#ifdef __cplusplus
+} // extern "C"
+#endif
