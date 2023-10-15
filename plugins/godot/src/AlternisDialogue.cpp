@@ -74,6 +74,13 @@ AlternisDialogue::AlternisDialogue()
 
 AlternisDialogue::~AlternisDialogue() {
     if (this->ade_ctx != nullptr) ade_dialogue_ctx_destroy(ade_ctx);
+
+    auto* cb_info = this->first_callback;
+    while (cb_info != nullptr) {
+        auto* next = cb_info->next;
+        memdelete(cb_info);
+        cb_info = next;
+    }
 }
 
 void AlternisDialogue::_ready() {
@@ -91,18 +98,18 @@ void AlternisDialogue::_ready() {
 #ifdef __linux
     const int fd = open(local_path.utf8().get_data(), O_RDONLY);
     if (fd == -1) {
-        printf("alternis: no such file: '%s'", local_path.utf8().get_data());
+        fprintf(stderr, "alternis: no such file: '%s'", local_path.utf8().get_data());
         return;
     }
     struct stat file_stat;
     if (fstat(fd, &file_stat) == -1) {
-        printf("alternis: file stat on '%s' failed", local_path.utf8().get_data());
+        fprintf(stderr, "alternis: file stat on '%s' failed", local_path.utf8().get_data());
         return;
     }
     const size_t file_len = file_stat.st_size;
     char* file_ptr = static_cast<char*>(mmap(NULL, file_len, PROT_READ, MAP_PRIVATE, fd, 0));
     if (file_ptr == MAP_FAILED) {
-        printf("alternis: file stat on '%s' failed", local_path.utf8().get_data());
+        fprintf(stderr, "alternis: file stat on '%s' failed", local_path.utf8().get_data());
         return;
     }
 #endif
@@ -124,17 +131,17 @@ void AlternisDialogue::_ready() {
 
     if (errPtr != nullptr) {
         // FIXME: need to free the error
-        printf("alternis: init error '%s'", local_path.utf8().get_data());
+        fprintf(stderr, "alternis: init error '%s'", local_path.utf8().get_data());
     }
 
 #ifdef __linux
     if (munmap(file_ptr, file_len) == -1) {
         // NOTE: not checking errno because should switch this all to zig
-        printf("alternis: munmap of '%s' failed", local_path.utf8().get_data());
+        fprintf(stderr, "alternis: munmap of '%s' failed", local_path.utf8().get_data());
         return;
     }
     if (close(fd) == -1) {
-        printf("alternis: closing '%s' failed", local_path.utf8().get_data());
+        fprintf(stderr, "alternis: closing '%s' failed", local_path.utf8().get_data());
         return;
     }
 #endif
@@ -203,11 +210,6 @@ Dictionary AlternisDialogue::step() {
     ade_dialogue_ctx_step(this->ade_ctx, &nativeResult);
     result = stepResultToDict(nativeResult);
 
-    // for every function register it as "update_last_function_called"?
-    // or just return the function name lol
-    if (result.has("function_called"))
-        emit_signal("function_called", this, last_function_called);
-
     emit_signal("dialogue_stepped", this, result);
     return result;
 }
@@ -234,6 +236,33 @@ bool AlternisDialogue::get_interpolate() { return this->interpolate; }
 
 void AlternisDialogue::set_variable_string(const godot::StringName, const godot::String) {}
 void AlternisDialogue::set_variable_boolean(const godot::StringName, const bool) {}
-void AlternisDialogue::set_callback(const godot::StringName, const godot::Callable) {}
+
+static void _dispatch_callback(void* in_cb_info) {
+    CRASH_COND(in_cb_info == nullptr);
+    auto& cb_info = *static_cast<alternis::AlternisDialogue::CallbackInfo*>(in_cb_info);
+    cb_info.callable.callv(Array());
+    cb_info.owner->emit_signal("function_called", cb_info.owner, cb_info.name);
+}
+
+void AlternisDialogue::set_callback(const godot::StringName name, godot::Callable callable) {
+    if (this->ade_ctx == nullptr) return;
+
+    auto cb_info = memnew(CallbackInfo);
+    *cb_info = CallbackInfo{
+        .owner = this,
+        .name = name,
+        .callable = callable,
+    };
+
+    if (this->last_callback != nullptr)
+        this->last_callback->next = cb_info;
+    else
+        this->first_callback = cb_info;
+
+    const String str_name{name};
+    ade_dialogue_ctx_set_callback(
+        this->ade_ctx, str_name.utf8().get_data(), str_name.utf8().size(), _dispatch_callback, cb_info
+    );
+}
 
 } // namespace alternis

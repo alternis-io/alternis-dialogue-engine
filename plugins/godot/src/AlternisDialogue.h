@@ -12,11 +12,22 @@ namespace alternis {
 
 class AlternisDialogue : public godot::Node {
     GDCLASS(AlternisDialogue, godot::Node)
+
+    struct CallbackInfo {
+        AlternisDialogue* owner;
+        godot::StringName name;
+        godot::Callable callable;
+        CallbackInfo* next = nullptr;
+    };
+
     godot::String resource_path;
     DialogueContext* ade_ctx = nullptr;
-    // if 0, clock will be used
+    // if 0, a random number will be used for the seed
     uint64_t random_seed = 0;
     bool interpolate = true;
+
+    CallbackInfo* first_callback = nullptr;
+    CallbackInfo* last_callback = nullptr;
 
 protected:
     static void _bind_methods();
@@ -42,7 +53,7 @@ public:
 
     void set_variable_string(const godot::StringName, const godot::String);
     void set_variable_boolean(const godot::StringName, const bool);
-    void set_callback(const godot::StringName, const godot::Callable);
+    void set_callback(const godot::StringName, godot::Callable);
 };
 
 } // godot;
