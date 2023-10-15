@@ -3,47 +3,55 @@
 [ext_resource type="Script" path="res://DialogueUI.gd" id="1_d78hs"]
 
 [node name="main" type="Node2D"]
+metadata/_edit_lock_ = true
 
-[node name="DialogueUI" type="Control" parent="."]
+[node name="CanvasLayer" type="CanvasLayer" parent="."]
+
+[node name="DialogueUI" type="Control" parent="CanvasLayer"]
 layout_mode = 3
-anchors_preset = 0
-offset_right = 40.0
-offset_bottom = 40.0
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
 script = ExtResource("1_d78hs")
 
-[node name="Button" type="Button" parent="DialogueUI"]
-layout_mode = 2
-offset_left = 534.0
-offset_top = 364.0
-offset_right = 576.0
-offset_bottom = 395.0
-text = "step"
+[node name="Center" type="CenterContainer" parent="CanvasLayer/DialogueUI"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
 
-[node name="Options" type="HBoxContainer" parent="DialogueUI"]
+[node name="VBox" type="VBoxContainer" parent="CanvasLayer/DialogueUI/Center"]
 layout_mode = 2
-offset_left = 445.0
-offset_top = 290.0
-offset_right = 720.0
-offset_bottom = 330.0
+metadata/_edit_lock_ = true
 
-[node name="Speaker" type="Label" parent="DialogueUI"]
+[node name="Speaker" type="Label" parent="CanvasLayer/DialogueUI/Center/VBox"]
 layout_mode = 2
-offset_left = 530.0
-offset_top = 161.0
-offset_right = 592.0
-offset_bottom = 187.0
 text = "speaker"
 horizontal_alignment = 1
 
-[node name="Text" type="Label" parent="DialogueUI"]
+[node name="HBox" type="HBoxContainer" parent="CanvasLayer/DialogueUI/Center/VBox"]
+custom_minimum_size = Vector2(500, 0)
 layout_mode = 2
-offset_left = 459.0
-offset_top = 233.0
-offset_right = 692.0
-offset_bottom = 285.0
-text = "test"
-horizontal_alignment = 1
+alignment = 1
 
-[node name="AlternisDialogue" type="AlternisDialogue" parent="DialogueUI"]
+[node name="Text" type="RichTextLabel" parent="CanvasLayer/DialogueUI/Center/VBox/HBox"]
+custom_minimum_size = Vector2(200, 0)
+layout_mode = 2
+bbcode_enabled = true
+text = "test [b]me[/b]"
+fit_content = true
+shortcut_keys_enabled = false
+
+[node name="NextButton" type="Button" parent="CanvasLayer/DialogueUI/Center/VBox/HBox"]
+layout_mode = 2
+text = "Next"
+
+[node name="AlternisDialogue" type="AlternisDialogue" parent="CanvasLayer/DialogueUI"]
 alternis_json = "res://assets/sample1.alternis.json"
 random_seed = 497456229

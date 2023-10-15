@@ -174,8 +174,11 @@ static Dictionary stepResultToDict(StepResult stepResult) {
 
         result["line"] = subdict;
 
-    } else if (stepResult.tag == STEP_RESULT_DONE) {
+    } else if (stepResult.tag == STEP_RESULT_FUNCTION_CALLED) {
         result["function_called"] = true;
+        // for every function register it as "update_last_function_called"?
+        // or just return the function name lol
+        emit_signal("function_called", this, last_function_called);
 
     } else {
         // FIXME: not win32 capable
