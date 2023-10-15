@@ -16,5 +16,5 @@ popd
 
 # build our bindings
 scons platform=linux target=template_release debug_symbols=no
-scons platform=linux target=template_debug debug_symbols=yes
+scons platform=linux target=template_debug debug_symbols=yes compiledb=yes
 

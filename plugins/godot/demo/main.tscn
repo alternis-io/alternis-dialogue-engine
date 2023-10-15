@@ -1,3 +1,48 @@
-[gd_scene format=3 uid="uid://gabcwrmv6ye1"]
+[gd_scene load_steps=2 format=3 uid="uid://gabcwrmv6ye1"]
+
+[ext_resource type="Script" path="res://DialogueUI.gd" id="1_d78hs"]
 
 [node name="main" type="Node2D"]
+
+[node name="DialogueUI" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 0
+offset_right = 40.0
+offset_bottom = 40.0
+script = ExtResource("1_d78hs")
+
+[node name="Button" type="Button" parent="DialogueUI"]
+layout_mode = 2
+offset_left = 534.0
+offset_top = 364.0
+offset_right = 576.0
+offset_bottom = 395.0
+text = "step"
+
+[node name="Options" type="HBoxContainer" parent="DialogueUI"]
+layout_mode = 2
+offset_left = 445.0
+offset_top = 290.0
+offset_right = 720.0
+offset_bottom = 330.0
+
+[node name="Speaker" type="Label" parent="DialogueUI"]
+layout_mode = 2
+offset_left = 530.0
+offset_top = 161.0
+offset_right = 592.0
+offset_bottom = 187.0
+text = "speaker"
+horizontal_alignment = 1
+
+[node name="Text" type="Label" parent="DialogueUI"]
+layout_mode = 2
+offset_left = 459.0
+offset_top = 233.0
+offset_right = 692.0
+offset_bottom = 285.0
+text = "test"
+horizontal_alignment = 1
+
+[node name="AlternisDialogue" type="AlternisDialogue" parent="DialogueUI"]
+alternis_json = "res://assets/sample1.alternis.json"

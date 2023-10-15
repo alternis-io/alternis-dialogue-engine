@@ -1,4 +1,6 @@
 #include "AlternisDialogue.h"
+#include <godot_cpp/classes/os.hpp>
+#include <godot_cpp/classes/project_settings.hpp>
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/variant/string.hpp>
 #include <godot_cpp/variant/dictionary.hpp>
@@ -64,6 +66,17 @@ AlternisDialogue::~AlternisDialogue() {
 }
 
 void AlternisDialogue::_ready() {
+    const auto& ProjectSettings = *godot::ProjectSettings::get_singleton();
+    const auto& OS = *godot::OS::get_singleton();
+
+    const auto in_exported = OS.has_feature("editor");
+    const String local_path
+        = in_exported
+        ? OS.get_executable_path().get_base_dir()
+            .path_join(this->get_resource_path().substr(sizeof("res://")))
+        : ProjectSettings.globalize_path(this->get_resource_path());
+    ;
+
 #ifdef __linux
     const int fd = open(this->resource_path.utf8().get_data(), O_RDONLY);
     if (fd == -1) {
