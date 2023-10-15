@@ -4,8 +4,8 @@
   "description": "the wasm bundle of the alternis dialogue engine library",
   "main": "index.js",
   "scripts": {
-    "build": "zig build web -Doptimize=ReleaseSmall",
-    "dev": "find . -name '*.zig' | entr bash -c 'zig build web && echo built'",
+    "build": "zig build -Doptimize=ReleaseSmall",
+    "dev": "find . -name '*.zig' | entr bash -c 'zig build && echo built'",
     "test": "zig build test"
   },
   "keywords": ["alternis", "dialogue", "dialogue-engine"],

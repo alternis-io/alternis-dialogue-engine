@@ -46,3 +46,4 @@ horizontal_alignment = 1
 
 [node name="AlternisDialogue" type="AlternisDialogue" parent="DialogueUI"]
 alternis_json = "res://assets/sample1.alternis.json"
+random_seed = 497456229

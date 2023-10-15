@@ -1,6 +1,7 @@
 #include "AlternisDialogue.h"
 #include <godot_cpp/classes/os.hpp>
 #include <godot_cpp/classes/project_settings.hpp>
+#include <godot_cpp/core/memory.hpp>
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/variant/string.hpp>
 #include <godot_cpp/variant/dictionary.hpp>
@@ -59,6 +60,10 @@ AlternisDialogue::AlternisDialogue()
     , random_seed(0)
     , interpolate(true)
 {
+    ade_set_alloc(
+        (void*(*)(size_t)) ::godot::Memory::alloc_static,
+        (void(*)(void*)) ::godot::Memory::free_static
+    );
 }
 
 AlternisDialogue::~AlternisDialogue() {
@@ -69,7 +74,7 @@ void AlternisDialogue::_ready() {
     const auto& ProjectSettings = *godot::ProjectSettings::get_singleton();
     const auto& OS = *godot::OS::get_singleton();
 
-    const auto in_exported = OS.has_feature("editor");
+    const auto in_exported = !OS.has_feature("editor");
     const String local_path
         = in_exported
         ? OS.get_executable_path().get_base_dir()
@@ -78,25 +83,25 @@ void AlternisDialogue::_ready() {
     ;
 
 #ifdef __linux
-    const int fd = open(this->resource_path.utf8().get_data(), O_RDONLY);
+    const int fd = open(local_path.utf8().get_data(), O_RDONLY);
     if (fd == -1) {
-        printf("alternis: no such file: '%s'", this->resource_path.utf8().get_data());
+        printf("alternis: no such file: '%s'", local_path.utf8().get_data());
         return;
     }
     struct stat file_stat;
     if (fstat(fd, &file_stat) == -1) {
-        printf("alternis: file stat on '%s' failed", this->resource_path.utf8().get_data());
+        printf("alternis: file stat on '%s' failed", local_path.utf8().get_data());
         return;
     }
     const size_t file_len = file_stat.st_size;
     char* file_ptr = static_cast<char*>(mmap(NULL, file_len, PROT_READ, MAP_PRIVATE, fd, 0));
     if (file_ptr == MAP_FAILED) {
-        printf("alternis: file stat on '%s' failed", this->resource_path.utf8().get_data());
+        printf("alternis: file stat on '%s' failed", local_path.utf8().get_data());
         return;
     }
 #endif
 #ifdef WIN32
-    // FIXME: not implemented
+    not_implemented;
 #endif
 
     random_seed = this->random_seed == 0 ? random() : this->random_seed;
@@ -113,22 +118,22 @@ void AlternisDialogue::_ready() {
 
     if (errPtr != nullptr) {
         // FIXME: need to free the error
-        printf("alternis: init error '%s'", this->resource_path.utf8().get_data());
+        printf("alternis: init error '%s'", local_path.utf8().get_data());
     }
 
 #ifdef __linux
-    close(fd);
-    if (close(fd) == -1) {
-        printf("alternis: closing '%s' failed", this->resource_path.utf8().get_data());
+    if (munmap(file_ptr, file_len) == -1) {
+        // NOTE: not checking errno because should switch this all to zig
+        printf("alternis: munmap of '%s' failed", local_path.utf8().get_data());
         return;
     }
-    if (munmap(file_ptr, file_len) == -1) {
-        printf("alternis: munmap of '%s' failed", this->resource_path.utf8().get_data());
+    if (close(fd) == -1) {
+        printf("alternis: closing '%s' failed", local_path.utf8().get_data());
         return;
     }
 #endif
 #ifdef WIN32
-    // FIXME: not implemented
+    not_implemented;
 #endif
 }
 
@@ -167,7 +172,7 @@ static Dictionary stepResultToDict(StepResult stepResult) {
         if (line.metadata.ptr != nullptr)
             subdict["metadata"] = String::utf8(line.metadata.ptr, line.metadata.len);
 
-        result["options"] = subdict;
+        result["line"] = subdict;
 
     } else if (stepResult.tag == STEP_RESULT_DONE) {
         result["function_called"] = true;
