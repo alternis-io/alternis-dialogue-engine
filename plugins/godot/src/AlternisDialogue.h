@@ -4,15 +4,15 @@
 #include <stddef.h>
 #include <godot_cpp/classes/node.hpp>
 #include <godot_cpp/variant/string.hpp>
+#include <godot_cpp/variant/string_name.hpp>
 #include <godot_cpp/variant/dictionary.hpp>
 #include <alternis.h>
 
-// FIXME: don't use godot namespace
-namespace godot {
+namespace alternis {
 
-class AlternisDialogue : public Node {
-    GDCLASS(AlternisDialogue, Node)
-    String resource_path;
+class AlternisDialogue : public godot::Node {
+    GDCLASS(AlternisDialogue, godot::Node)
+    godot::String resource_path;
     DialogueContext* ade_ctx = nullptr;
     // if 0, clock will be used
     uint64_t random_seed = 0;
@@ -27,8 +27,8 @@ public:
 
     virtual void _ready() override;
 
-    void set_resource_path(const String path);
-    String get_resource_path();
+    void set_resource_path(const godot::String path);
+    godot::String get_resource_path();
 
     void set_random_seed(const uint64_t value);
     uint64_t get_random_seed();
@@ -37,9 +37,12 @@ public:
     bool get_interpolate();
 
     void reset();
-    Dictionary step();
+    godot::Dictionary step();
     void reply(size_t replyId);
 
+    void set_variable_string(const godot::StringName, const godot::String);
+    void set_variable_boolean(const godot::StringName, const bool);
+    void set_callback(const godot::StringName, const godot::Callable);
 };
 
 } // godot;

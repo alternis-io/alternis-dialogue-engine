@@ -18,11 +18,9 @@
 
 using namespace godot;
 
-void AlternisDialogue::_bind_methods() {
-    ClassDB::bind_method(D_METHOD("reset"), &AlternisDialogue::reset);
-    ClassDB::bind_method(D_METHOD("reply", "replyId"), &AlternisDialogue::reply);
-    ClassDB::bind_method(D_METHOD("step"), &AlternisDialogue::step);
+namespace alternis {
 
+void AlternisDialogue::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_resource_path"), &AlternisDialogue::get_resource_path);
     ClassDB::bind_method(D_METHOD("set_resource_path", "resource_path"), &AlternisDialogue::set_resource_path);
     ClassDB::bind_method(D_METHOD("get_interpolate"), &AlternisDialogue::get_interpolate);
@@ -52,6 +50,14 @@ void AlternisDialogue::_bind_methods() {
     ADD_SIGNAL(MethodInfo("function_called",
                           PropertyInfo(Variant::OBJECT, "self"),
                           PropertyInfo(Variant::STRING, "text")));
+
+    ClassDB::bind_method(D_METHOD("reset"), &AlternisDialogue::reset);
+    ClassDB::bind_method(D_METHOD("reply", "replyId"), &AlternisDialogue::reply);
+    ClassDB::bind_method(D_METHOD("step"), &AlternisDialogue::step);
+
+    ClassDB::bind_method(D_METHOD("set_variable_string"), &AlternisDialogue::set_variable_string);
+    ClassDB::bind_method(D_METHOD("set_variable_boolean"), &AlternisDialogue::set_variable_boolean);
+    ClassDB::bind_method(D_METHOD("set_callback"), &AlternisDialogue::set_callback);
 }
 
 AlternisDialogue::AlternisDialogue()
@@ -176,9 +182,6 @@ static Dictionary stepResultToDict(StepResult stepResult) {
 
     } else if (stepResult.tag == STEP_RESULT_FUNCTION_CALLED) {
         result["function_called"] = true;
-        // for every function register it as "update_last_function_called"?
-        // or just return the function name lol
-        emit_signal("function_called", this, last_function_called);
 
     } else {
         // FIXME: not win32 capable
@@ -199,6 +202,12 @@ Dictionary AlternisDialogue::step() {
     }
     ade_dialogue_ctx_step(this->ade_ctx, &nativeResult);
     result = stepResultToDict(nativeResult);
+
+    // for every function register it as "update_last_function_called"?
+    // or just return the function name lol
+    if (result.has("function_called"))
+        emit_signal("function_called", this, last_function_called);
+
     emit_signal("dialogue_stepped", this, result);
     return result;
 }
@@ -222,3 +231,9 @@ uint64_t AlternisDialogue::get_random_seed() { return this->random_seed; }
 
 void AlternisDialogue::set_interpolate(const bool value) { this->interpolate = value; }
 bool AlternisDialogue::get_interpolate() { return this->interpolate; }
+
+void AlternisDialogue::set_variable_string(const godot::StringName, const godot::String) {}
+void AlternisDialogue::set_variable_boolean(const godot::StringName, const bool) {}
+void AlternisDialogue::set_callback(const godot::StringName, const godot::Callable) {}
+
+} // namespace alternis

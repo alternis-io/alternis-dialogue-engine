@@ -11,7 +11,7 @@ using namespace godot;
 
 void initialize_alternis_module(ModuleInitializationLevel p_level) {
 	if (p_level != MODULE_INITIALIZATION_LEVEL_SCENE) return;
-	ClassDB::register_class<AlternisDialogue>();
+	ClassDB::register_class<alternis::AlternisDialogue>();
 }
 
 void uninitialize_alternis_module(ModuleInitializationLevel p_level) {
