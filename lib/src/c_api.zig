@@ -112,6 +112,17 @@ export fn ade_dialogue_ctx_set_callback(
     ctx.setCallback(name[0..len], .{ .function = function, .payload = payload });
 }
 
+/// the passed in pointers must exist as long as this is set
+export fn ade_dialogue_ctx_set_all_callbacks(
+    in_dialogue_ctx: ?*Api.DialogueContext,
+    function: *const fn(*Api.DialogueContext.SetAllCallbacksPayload) callconv(.C) void,
+    /// stored into SetAllCallbacksPayload.inner_payload
+    inner_payload: ?*anyopaque,
+) void {
+    const ctx = in_dialogue_ctx orelse return;
+    ctx.setAllCallbacks(.{.function = @ptrCast(function), .payload = inner_payload });
+}
+
 const Line = extern struct {
     speaker: Slice(u8),
     text: Slice(u8),

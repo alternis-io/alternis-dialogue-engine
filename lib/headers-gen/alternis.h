@@ -64,11 +64,22 @@ void ade_dialogue_ctx_destroy(DialogueContext* ctx);
 void ade_dialogue_ctx_reset(DialogueContext* ctx);
 void ade_dialogue_ctx_reply(DialogueContext* ctx, size_t reply_id);
 
-size_t ade_dialogue_ctx_set_callback(
+void ade_dialogue_ctx_set_callback(
     DialogueContext* ctx,
     const char* name,
     size_t name_len,
     void (*const callback)(void*),
+    void* payload
+);
+
+struct SetAllCallbacksPayload {
+    void* inner_payload;
+    StringSlice name;
+};
+
+void ade_dialogue_ctx_set_all_callbacks(
+    DialogueContext* ctx,
+    void (*const callback)(SetAllCallbacksPayload*),
     void* payload
 );
 

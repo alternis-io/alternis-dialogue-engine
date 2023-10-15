@@ -397,6 +397,37 @@ pub const DialogueContext = struct {
       catch |e| std.debug.panic("put memory error, shouldn't be possible?: {}", .{e});
   }
 
+  pub const SetAllCallbacksPayload = extern struct {
+    inner_payload: ?*anyopaque,
+    name: Slice(u8),
+  };
+
+  /// set one callback for every function in the dialogue, where the payload pointer will
+  /// be a pointer to the @see SetAllCallbacksPayload containing the passed payload and the
+  /// name of the called function per function
+  pub fn setAllCallbacks(
+    self: *@This(),
+    callback: Callback,
+  ) void {
+    // NOTE: relies on this values being pre-populated
+    var iter = self.functions.iterator();
+    while (iter.next()) |entry| {
+      // freed by arena
+      var payload = self.arena.allocator().create(SetAllCallbacksPayload)
+        catch |e| std.debug.panic("alloc error: {}", .{e});
+
+      payload.* = SetAllCallbacksPayload{
+        .name = Slice(u8).fromZig(entry.key_ptr.*),
+        .inner_payload = callback.payload,
+      };
+
+      entry.value_ptr.* = Callback{
+        .function = callback.function,
+        .payload = payload,
+      };
+    }
+  }
+
   /// the passed in "name" is not copied, so a reference to it must remain
   pub fn setVariableBoolean(self: *@This(), name: []const u8, value: bool) void {
     // FIXME: don't panic

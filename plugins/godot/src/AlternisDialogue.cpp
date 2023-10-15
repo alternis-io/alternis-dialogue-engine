@@ -49,7 +49,7 @@ void AlternisDialogue::_bind_methods() {
 
     ADD_SIGNAL(MethodInfo("function_called",
                           PropertyInfo(Variant::OBJECT, "self"),
-                          PropertyInfo(Variant::STRING, "text")));
+                          PropertyInfo(Variant::STRING, "name")));
 
     ClassDB::bind_method(D_METHOD("reset"), &AlternisDialogue::reset);
     ClassDB::bind_method(D_METHOD("reply", "replyId"), &AlternisDialogue::reply);
@@ -81,6 +81,12 @@ AlternisDialogue::~AlternisDialogue() {
         memdelete(cb_info);
         cb_info = next;
     }
+}
+
+static void _dispatch_callback(void* in_cb_info) {
+    CRASH_COND(in_cb_info == nullptr);
+    auto& cb_info = *static_cast<alternis::AlternisDialogue::CallbackInfo*>(in_cb_info);
+    cb_info.callable.callv(Array());
 }
 
 void AlternisDialogue::_ready() {
@@ -122,17 +128,27 @@ void AlternisDialogue::_ready() {
     const char* errPtr = nullptr;
 
     this->ade_ctx = ade_dialogue_ctx_create_json(
-            file_ptr,
-            file_len,
-            random_seed,
-            !this->interpolate,
-            &errPtr
-        );
+        file_ptr,
+        file_len,
+        random_seed,
+        !this->interpolate,
+        &errPtr
+    );
 
     if (errPtr != nullptr) {
         // FIXME: need to free the error
         fprintf(stderr, "alternis: init error '%s'", local_path.utf8().get_data());
     }
+
+    if (this->ade_ctx == nullptr) {
+        fprintf(stderr, "alternis: got invalid context");
+        return;
+    }
+
+    ade_dialogue_ctx_set_all_callbacks(this->ade_ctx, [](SetAllCallbacksPayload* payload){
+        auto* _this = static_cast<AlternisDialogue*>(payload->inner_payload);
+       _this->emit_signal("function_called", _this, godot::String::utf8(payload->name.ptr, payload->name.len));
+    }, this);
 
 #ifdef __linux
     if (munmap(file_ptr, file_len) == -1) {
@@ -236,13 +252,6 @@ bool AlternisDialogue::get_interpolate() { return this->interpolate; }
 
 void AlternisDialogue::set_variable_string(const godot::StringName, const godot::String) {}
 void AlternisDialogue::set_variable_boolean(const godot::StringName, const bool) {}
-
-static void _dispatch_callback(void* in_cb_info) {
-    CRASH_COND(in_cb_info == nullptr);
-    auto& cb_info = *static_cast<alternis::AlternisDialogue::CallbackInfo*>(in_cb_info);
-    cb_info.callable.callv(Array());
-    cb_info.owner->emit_signal("function_called", cb_info.owner, cb_info.name);
-}
 
 void AlternisDialogue::set_callback(const godot::StringName name, godot::Callable callable) {
     if (this->ade_ctx == nullptr) return;
