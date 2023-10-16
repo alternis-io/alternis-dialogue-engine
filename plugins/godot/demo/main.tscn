@@ -31,11 +31,13 @@ layout_mode = 2
 metadata/_edit_lock_ = true
 
 [node name="Speaker" type="Label" parent="CanvasLayer/DialogueUI/Center/VBox"]
+visible = false
 layout_mode = 2
 text = "speaker"
 horizontal_alignment = 1
 
 [node name="HBox" type="HBoxContainer" parent="CanvasLayer/DialogueUI/Center/VBox"]
+visible = false
 custom_minimum_size = Vector2(500, 0)
 layout_mode = 2
 alignment = 1
@@ -51,6 +53,10 @@ shortcut_keys_enabled = false
 [node name="NextButton" type="Button" parent="CanvasLayer/DialogueUI/Center/VBox/HBox"]
 layout_mode = 2
 text = "Next"
+
+[node name="StartButton" type="Button" parent="CanvasLayer/DialogueUI/Center/VBox"]
+layout_mode = 2
+text = "Start"
 
 [node name="AlternisDialogue" type="AlternisDialogue" parent="CanvasLayer/DialogueUI"]
 alternis_json = "res://assets/sample1.alternis.json"

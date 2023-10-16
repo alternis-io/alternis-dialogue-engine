@@ -1,20 +1,10 @@
 #include "AlternisDialogue.h"
-#include <godot_cpp/classes/os.hpp>
-#include <godot_cpp/classes/project_settings.hpp>
+#include <godot_cpp/classes/file_access.hpp>
 #include <godot_cpp/core/memory.hpp>
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/variant/string.hpp>
 #include <godot_cpp/variant/dictionary.hpp>
 #include <godot_cpp/variant/array.hpp>
-
-#ifdef __linux
-#include <sys/mman.h>
-#include <sys/stat.h>
-#include <unistd.h>
-#include <fcntl.h>
-#endif
-#ifdef WIN32
-#endif
 
 using namespace godot;
 
@@ -90,46 +80,16 @@ static void _dispatch_callback(void* in_cb_info) {
 }
 
 void AlternisDialogue::_ready() {
-    const auto& ProjectSettings = *godot::ProjectSettings::get_singleton();
-    const auto& OS = *godot::OS::get_singleton();
-
-    const auto in_exported = !OS.has_feature("editor");
-    const String local_path
-        = in_exported
-        ? OS.get_executable_path().get_base_dir()
-            .path_join(this->get_resource_path().substr(sizeof("res://")))
-        : ProjectSettings.globalize_path(this->get_resource_path());
-    ;
-
-#ifdef __linux
-    const int fd = open(local_path.utf8().get_data(), O_RDONLY);
-    if (fd == -1) {
-        fprintf(stderr, "alternis: no such file: '%s'", local_path.utf8().get_data());
-        return;
-    }
-    struct stat file_stat;
-    if (fstat(fd, &file_stat) == -1) {
-        fprintf(stderr, "alternis: file stat on '%s' failed", local_path.utf8().get_data());
-        return;
-    }
-    const size_t file_len = file_stat.st_size;
-    char* file_ptr = static_cast<char*>(mmap(NULL, file_len, PROT_READ, MAP_PRIVATE, fd, 0));
-    if (file_ptr == MAP_FAILED) {
-        fprintf(stderr, "alternis: file stat on '%s' failed", local_path.utf8().get_data());
-        return;
-    }
-#endif
-#ifdef WIN32
-    not_implemented;
-#endif
+    // FIXME: check, is this like reference count destroyed?
+    auto json_bytes = godot::FileAccess::get_file_as_bytes(this->resource_path);
 
     random_seed = this->random_seed == 0 ? random() : this->random_seed;
 
     const char* errPtr = nullptr;
 
     this->ade_ctx = ade_dialogue_ctx_create_json(
-        file_ptr,
-        file_len,
+        reinterpret_cast<const char*>(json_bytes.ptr()),
+        json_bytes.size(),
         random_seed,
         !this->interpolate,
         &errPtr
@@ -137,7 +97,7 @@ void AlternisDialogue::_ready() {
 
     if (errPtr != nullptr) {
         // FIXME: need to free the error
-        fprintf(stderr, "alternis: init error '%s'", local_path.utf8().get_data());
+        fprintf(stderr, "alternis: init error '%s'", resource_path.utf8().get_data());
     }
 
     if (this->ade_ctx == nullptr) {
@@ -149,21 +109,6 @@ void AlternisDialogue::_ready() {
         auto* _this = static_cast<AlternisDialogue*>(payload->inner_payload);
        _this->emit_signal("function_called", _this, godot::String::utf8(payload->name.ptr, payload->name.len));
     }, this);
-
-#ifdef __linux
-    if (munmap(file_ptr, file_len) == -1) {
-        // NOTE: not checking errno because should switch this all to zig
-        fprintf(stderr, "alternis: munmap of '%s' failed", local_path.utf8().get_data());
-        return;
-    }
-    if (close(fd) == -1) {
-        fprintf(stderr, "alternis: closing '%s' failed", local_path.utf8().get_data());
-        return;
-    }
-#endif
-#ifdef WIN32
-    not_implemented;
-#endif
 }
 
 static Dictionary stepResultToDict(StepResult stepResult) {
@@ -217,13 +162,16 @@ static Dictionary stepResultToDict(StepResult stepResult) {
 
 Dictionary AlternisDialogue::step() {
     Dictionary result;
-    StepResult nativeResult;
+
     if (this->ade_ctx == nullptr) {
         // FIXME: how to handle error? Print? ~~abort~~? emit_signal?
         // LOG_ERROR("dialogue context not set before calling step ()");
         return result;
     }
+
+    StepResult nativeResult;
     ade_dialogue_ctx_step(this->ade_ctx, &nativeResult);
+
     result = stepResultToDict(nativeResult);
 
     emit_signal("dialogue_stepped", this, result);
@@ -250,8 +198,23 @@ uint64_t AlternisDialogue::get_random_seed() { return this->random_seed; }
 void AlternisDialogue::set_interpolate(const bool value) { this->interpolate = value; }
 bool AlternisDialogue::get_interpolate() { return this->interpolate; }
 
-void AlternisDialogue::set_variable_string(const godot::StringName, const godot::String) {}
-void AlternisDialogue::set_variable_boolean(const godot::StringName, const bool) {}
+void AlternisDialogue::set_variable_string(const godot::StringName name, const godot::String value) {
+    const String name_data{name};
+    ade_dialogue_ctx_set_variable_string(
+        // NOTE: seemingly godot includes the null byte in the size
+        this->ade_ctx, name_data.utf8().get_data(), name_data.utf8().size() - 1,
+        value.utf8().get_data(), value.utf8().size() - 1
+    );
+}
+
+void AlternisDialogue::set_variable_boolean(const godot::StringName name, const bool value) {
+    const String name_data{name};
+    ade_dialogue_ctx_set_variable_boolean(
+        // NOTE: seemingly godot includes the null byte in the size
+        this->ade_ctx, name_data.utf8().get_data(), name_data.utf8().size() - 1,
+        value
+    );
+}
 
 void AlternisDialogue::set_callback(const godot::StringName name, godot::Callable callable) {
     if (this->ade_ctx == nullptr) return;
@@ -268,9 +231,11 @@ void AlternisDialogue::set_callback(const godot::StringName name, godot::Callabl
     else
         this->first_callback = cb_info;
 
-    const String str_name{name};
+    // FIXME: isn't this string temporary? doesn't that violate the ade_dialogue_ctx_set_callback API?
+    const String name_data{name};
     ade_dialogue_ctx_set_callback(
-        this->ade_ctx, str_name.utf8().get_data(), str_name.utf8().size(), _dispatch_callback, cb_info
+        // NOTE: seemingly godot includes the null byte in the size
+        this->ade_ctx, name_data.utf8().get_data(), name_data.utf8().size() - 1, _dispatch_callback, cb_info
     );
 }
 
