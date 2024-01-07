@@ -3,3 +3,6 @@ node_modules
 
 # misc
 *.log
+
+# native debugging
+*.gdb_history
