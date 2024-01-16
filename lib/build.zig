@@ -55,11 +55,12 @@ pub fn build(b: *std.Build) void {
 
     const supported_platforms = [_][]const u8{ "x86_64-windows", "x86_64-macos", "aarch64-macos", "x86_64-linux" };
 
-    for (supported_platforms) |platform| {
+    inline for (supported_platforms) |platform| {
         const platform_target = CrossTarget.parse(.{ .arch_os_abi = platform }) catch unreachable;
         // NOTE: this temporary is ok because it returns a pointer that we don't own
+        const name = std.fmt.comptimePrint("alternis-{s}", .{platform});
         const lib = b.addStaticLibrary(.{
-            .name = "alternis",
+            .name = name,
             .root_source_file = std.build.FileSource.relative("src/c_api.zig"),
             .target = platform_target,
             .optimize = optimize,
@@ -67,7 +68,7 @@ pub fn build(b: *std.Build) void {
         lib.force_pic = true;
         // FIXME: avoid doing this except for the godot case,
         // otherwise roundq is undefined reference when linked into the gdextension
-        lib.bundle_compiler_rt = true;
+        //lib.bundle_compiler_rt = true;
         const install_lib = b.addInstallArtifact(lib, .{});
         all_step.dependOn(&install_lib.step);
     }
