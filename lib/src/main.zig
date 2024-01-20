@@ -159,7 +159,7 @@ pub const DialogueContext = struct {
     functions: std.StringHashMap(?Callback),
     variables: struct {
         strings: std.StringHashMap([]const u8),
-        // FIXME: use custom dynamic bit set like structure for this2
+        // FIXME: use custom dynamic bit set like structure for this
         // maybe just a String->index hash map + dynamic bit set
         booleans: std.StringHashMap(bool),
     },
@@ -269,6 +269,8 @@ pub const DialogueContext = struct {
             r = Result(DialogueContext).fmt_err(alloc, "{}", .{e});
             return r;
         };
+        // FIXME: this is super broken methinks, both StringHashMap says key memory is owned by caller, which means gets will never work since
+        // they don't have access to the mmaped JSON
         for (dialogue_data.variables.boolean) |json_var|
             booleans.put(json_var.name, false) catch |e| std.debug.panic("put memory error: {}", .{e});
 
@@ -431,7 +433,6 @@ pub const DialogueContext = struct {
         }
     }
 
-    /// the passed in "name" is not copied, so a reference to it must remain
     pub fn setVariableBoolean(self: *@This(), name: []const u8, value: bool) void {
         // FIXME: don't panic
         const var_ptr = self.variables.booleans.getPtr(name) orelse std.debug.panic("no such boolean variable: '{s}'", .{name});
@@ -439,7 +440,8 @@ pub const DialogueContext = struct {
         var_ptr.* = value;
     }
 
-    /// the passed in "name" is not copied, so a reference to it must remain.
+    // FIXME: use a string-intern table and have id-based apis
+    // FIXME: why not let the consumer own the memory?
     /// the passed in "value" is always copied
     pub fn setVariableString(self: *@This(), name: []const u8, value: []const u8) void {
         // will be cleaned up when area is deinited

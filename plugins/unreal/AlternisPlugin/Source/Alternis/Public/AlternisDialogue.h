@@ -62,34 +62,32 @@ enum class EStepType : uint8
     FunctionCalled = STEP_RESULT_FUNCTION_CALLED UMETA(DisplayName = "FunctionCalled")
 };
 
-// NOTE: blueprint accessible size-inefficient union
+// NOTE: blueprint accessible (worst case) size-inefficient union
+// probably better than UObject inheriting function-based size efficient union
 USTRUCT(BlueprintType)
 struct FStepResult
 {
     GENERATED_BODY()
 
-private:
-    StepResult data;
-
-public:
     FStepResult(StepResult);
 
     UPROPERTY(BlueprintReadonly, Category="Alternis|Dialogue")
         EStepType Type;
 
+    /** Check Type before usage to be sure this isn't empty */
     UPROPERTY(BlueprintReadonly, Category="Alternis|Dialogue")
         FAlternisLine Line;
 
-    UPROPERTY(BlueprintReadonly, Category="Alternis|Dialogue", meta(Comment="Check Type to ensure this isn't empty"))
-        FAlternisReplyOptions ReplyOptions
+    /** Check Type before usage to be sure this isn't empty */
+    UPROPERTY(BlueprintReadonly, Category="Alternis|Dialogue")
+        FAlternisReplyOptions ReplyOptions;
 };
 
 class UAlternisDialogue;
 
-//UDELEGATE(BlueprintAuthorityOnly)
-DECLARE_MULTICAST_DYNAMIC_DELEGATE_OneParam(FAlternisCallbackSignature, UAlternisDialogue*)
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FAlternisCallbackSignature, UAlternisDialogue*, DialogueContext);
 
-// NOTE: structs can't contain delegates so this is a full blown object :/
+// NOTE: structs can't contain delegates so this is a full blown object :|
 UCLASS(BlueprintType)
 class UAlternisCallback : public UObject
 {
@@ -142,18 +140,19 @@ public:
         FStepResult Step();
 
     UFUNCTION(BlueprintCallable)
-        void Reply(size_t replyId);
+        void Reply(int64 replyId);
 
     UFUNCTION(BlueprintPure)
-        FString GetVariableString(const FString&);
+        FString GetVariableString(const FString& VariableName);
+
     UFUNCTION(BlueprintCallable)
-        void SetVariableString(const FString&, const FString&);
+        void SetVariableString(const FString& VariableName, const FString& VariableValue);
 
     UFUNCTION(BlueprintPure)
-        bool GetVariableBoolean(const FString&);
+        bool GetVariableBoolean(const FString& VariableName);
     UFUNCTION(BlueprintCallable)
-        void SetVariableBoolean(const FString&, const bool);
+        void SetVariableBoolean(const FString& VariableName, const bool VariableValue);
 
     UFUNCTION(BlueprintCallable)
-        void SetCallback(const FString, UAlternisCallback*);
+        void SetCallback(const FName& CallbackName, UAlternisCallback* Callback);
 };
