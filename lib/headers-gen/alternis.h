@@ -1,3 +1,5 @@
+#ifndef ALTERNIS_LIB_DIALOGUE_H
+#define ALTERNIS_LIB_DIALOGUE_H
 // not currently generated, that will/should be a zig feature. We should consider contributing it
 
 #ifdef __cplusplus
@@ -103,3 +105,5 @@ void ade_dialogue_ctx_step(DialogueContext* ctx, StepResult* return_val);
 #ifdef __cplusplus
 } // extern "C"
 #endif
+
+#endif // ALTERNIS_LIB_DIALOGUE_H

@@ -2,102 +2,134 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "Components/ActorComponent.h"
 #include "Containers/Union.h"
 #include "Containers/Array.h"
-#include <stddef.h>
-#include <stdint.h>
+#include "Containers/List.h"
+#include "Containers/Map.h"
 #include "alternis.h"
+#include <stddef.h>
 
 #include "AlternisDialogue.generated.h"
 
+static_assert(sizeof(int64) == sizeof(size_t), "unexpected type");
+
 USTRUCT(BlueprintType)
-struct FReply
+struct FAlternisReply
 {
     GENERATED_BODY()
-    FString Text;
-    size_t Id;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Alternis|Dialogue")
+        FString Text;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Alternis|Dialogue")
+        int64 Id;
 };
 
 USTRUCT(BlueprintType)
-struct FReplyOptions
+struct FAlternisReplyOptions
 {
     GENERATED_BODY()
-    TArray<FReply> Options;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Alternis|Dialogue")
+        TArray<FAlternisReply> Options;
 };
 
 USTRUCT(BlueprintType)
-struct FLine
+struct FAlternisLine
 {
     GENERATED_BODY()
-    FString Speaker;
-    FString Text;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Alternis|Dialogue")
+        FString Speaker;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Alternis|Dialogue")
+        FString Text;
+
     // FIXME: make an FJson object...
-    FString Metadata;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Alternis|Dialogue")
+        FString Metadata;
 };
 
+// FIXME: do we need this when we have a union?
 UENUM(BlueprintType)
-// FIXME: use TUnion
 enum class EStepType : uint8
 {
     None UMETA(DisplayName = ""),
     Reply UMETA(DisplayName = "")
 };
 
-using FStepResult = TUnion<void, FReplyOptions, FLine, void>;
+using FStepResult = TUnion<void, FAlternisReplyOptions, FAlternisLine, void>;
 
-UCLASS()
-class ALTERNIS_API UAlternisDialogue : public USceneComponent
+class UAlternisDialogue;
+
+//UDELEGATE(BlueprintAuthorityOnly)
+DECLARE_MULTICAST_DYNAMIC_DELEGATE_OneParam(FAlternisCallbackSignature, UAlternisDialogue*)
+
+// NOTE: structs can't contain delegates so this is a full blown object :/
+UCLASS(BlueprintType)
+class UAlternisCallback : public UObject {
+    GENERATED_BODY()
+public:
+
+    UPROPERTY()
+        UAlternisDialogue* owner;
+
+    //UPROPERTY(BlueprintReadonly, Category = "Alternis|Dialogue|Callback")
+    //FName name;
+
+    UPROPERTY(BlueprintAssignable, Category = "Alternis|Dialogue|Callback")
+        FAlternisCallbackSignature Callback;
+
+    //void Call(UAlternisDialogue*)
+};
+
+UCLASS(BlueprintType)
+class ALTERNIS_API UAlternisDialogue : public UActorComponent
 {
     GENERATED_BODY()
 
     DialogueContext* ade_ctx = nullptr;
 
+    TList<FName, UAlternisCallback*> StringVars;
+    TList<FName, UAlternisCallback*> BooleanVars;
+    TMap<FName, UAlternisCallback*> Callbacks;
+
 public:
 
-    struct CallbackInfo {
-        UAlternisDialogue* owner;
-        FName name;
-        void(*callable)(void*);
-        CallbackInfo* next = nullptr;
-    };
-
+    UAlternisDialogue();
+    ~UAlternisDialogue();
+    virtual void BeginPlay() override;
 
     UPROPERTY(EditAnywhere, Category="Alternis|Dialogue")
-    FString resource_path;
+        FString ResourcePath;
 
     // if 0, a random number will be used for the seed
     UPROPERTY(EditAnywhere, Category="Alternis|Dialogue")
-    uint64 random_seed = 0;
+        uint64 RandomSeed = 0;
 
     UPROPERTY(EditAnywhere, Category="Alternis|Dialogue")
-    bool interpolate = true;
+        bool bInterpolate = true;
 
-    CallbackInfo* first_callback = nullptr;
-    CallbackInfo* last_callback = nullptr;
+    UFUNCTION(BlueprintCallable)
+        void Reset();
 
-protected:
-    static void _bind_methods();
+    UFUNCTION(BlueprintCallable)
+        FStepResult Step();
 
-public:
-    UAlternisDialogue();
-    ~UAlternisDialogue();
+    UFUNCTION(BlueprintCallable)
+        void Reply(size_t replyId);
 
-    virtual void BeginPlay() override;
+    UFUNCTION(BlueprintPure)
+        FString GetVariableString(const FString&);
+    UFUNCTION(BlueprintCallable)
+        void SetVariableString(const FString&, const FString&);
 
-    void SetResourcePath(const FString& path);
-    FString GetResourcePath();
+    UFUNCTION(BlueprintPure)
+        bool GetVariableBoolean(const FString&);
+    UFUNCTION(BlueprintCallable)
+        void SetVariableBoolean(const FString&, const bool);
 
-    void set_random_seed(const uint64_t value);
-    uint64_t get_random_seed();
-
-    void set_interpolate(const bool value);
-    bool get_interpolate();
-
-    void Reset();
-    FStepResult step();
-    void Reply(size_t replyId);
-
-    void SetVariableString(const FString&, const FString&);
-    void SetVariableBoolean(const FString&, const bool);
-    void SetCallback(const FString, UFunction);
+    UFUNCTION(BlueprintCallable)
+        void SetCallback(const FString, UAlternisCallback*);
 };
