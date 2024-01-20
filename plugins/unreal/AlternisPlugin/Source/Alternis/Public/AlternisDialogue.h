@@ -1,5 +1,4 @@
-#ifndef ALTERNIS_DIALOGUE_H
-#define ALTERNIS_DIALOGUE_H
+#pragma once
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
@@ -38,7 +37,7 @@ struct FLine
 
 UENUM(BlueprintType)
 // FIXME: use TUnion
-enum class EStepType : unsigned char
+enum class EStepType : uint8
 {
     None UMETA(DisplayName = ""),
     Reply UMETA(DisplayName = "")
@@ -68,7 +67,7 @@ public:
 
     // if 0, a random number will be used for the seed
     UPROPERTY(EditAnywhere, Category="Alternis|Dialogue")
-    uint64_t random_seed = 0;
+    uint64 random_seed = 0;
 
     UPROPERTY(EditAnywhere, Category="Alternis|Dialogue")
     bool interpolate = true;
@@ -102,5 +101,3 @@ public:
     void SetVariableBoolean(const FString&, const bool);
     void SetCallback(const FString, UFunction);
 };
-
-#endif

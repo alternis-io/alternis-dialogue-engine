@@ -13,10 +13,9 @@ public class Alternis : ModuleRules
 
         PrivateIncludePaths.AddRange(new string[] { });
 
-        PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "ProceduralMeshComponent" });
+        PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine" });
 
-        PrivateDependencyModuleNames.AddRange(new string[] { "CoreUObject", "Engine", "Slate", "SlateCore", "WebSockets", "Json",
-                                                                 "JsonUtilities", "MeshDescription", "HTTP", "HTTPServer", "RHI", "RenderCore", "Projects" });
+        PrivateDependencyModuleNames.AddRange(new string[] { "CoreUObject", "Engine", "Slate", "SlateCore", "Json", "JsonUtilities" });
         if (Target.bBuildEditor)
         {
             PrivateDependencyModuleNames.AddRange(new string[] { "UnrealEd" });
@@ -24,7 +23,7 @@ public class Alternis : ModuleRules
 
         DynamicallyLoadedModuleNames.AddRange(new string[] { });
 
-        string AlternisPath = Path.GetFullPath(Path.Combine(ModuleDirectory, "../../../../../lib"));
+        string AlternisPath = Path.GetFullPath(Path.Combine(ModuleDirectory, "../../../../../../../lib"));
 
         PublicIncludePaths.Add(Path.Combine(AlternisPath, "headers-gen"));
 
