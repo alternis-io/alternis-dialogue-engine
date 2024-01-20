@@ -6,6 +6,40 @@
 
 #include "alternis.h"
 
+EStepType FStepResult::GetType()
+{
+    return (EStepType) this->data.tag;
+}
+
+FAlternisLine FStepResult::GetLine()
+{
+    checkf(this->data.tag == STEP_RESULT_LINE);
+
+    return FAlternisLine(
+        FString(this->data.line.speaker.ptr, this->data.line.speaker.len),
+        FString(this->data.line.text.ptr, this->data.line.text.len),
+        FString(this->data.line.metadata.ptr, this->data.line.metadata.len),
+    );
+}
+
+FAlternisReplyOptions FStepResult::GetReplyOptions()
+{
+    checkf(this->data.tag == STEP_RESULT_OPTIONS);
+
+    TArray<FAlternisReplyOption> options;
+    options.Reserve(this->data.options.texts.len);
+
+    for (auto i = 0; i < this->data.options.texts.len; ++i)
+    {
+        options.Emplace(
+            FString(this->data.options.texts[i].ptr, this->data.options.texts[i].len),
+            this->data.options.ids[i]
+        );
+    }
+
+    return FAlternisReplyOptions{MoveTemp(options});
+}
+
 UAlternisDialogue::UAlternisDialogue()
     : ade_ctx(nullptr)
     , ResourcePath("")
@@ -32,7 +66,7 @@ UAlternisDialogue::~UAlternisDialogue() {
 
 static void _dispatch_callback(void* in_cb_info) {
     checkf(in_cb_info == nullptr, TEXT("tried to dispatch a callback that doesn't exist."));
-    auto& cb_info = *static_cast<:UAlternisDialogue::CallbackInfo*>(in_cb_info);
+    auto& cb_info = *static_cast<UAlternisDialogue::CallbackInfo*>(in_cb_info);
     cb_info.callable.callv(Array());
 }
 

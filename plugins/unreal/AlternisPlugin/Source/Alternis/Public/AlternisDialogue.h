@@ -15,7 +15,7 @@
 static_assert(sizeof(int64) == sizeof(size_t), "unexpected type");
 
 USTRUCT(BlueprintType)
-struct FAlternisReply
+struct FAlternisReplyOption
 {
     GENERATED_BODY()
 
@@ -32,7 +32,7 @@ struct FAlternisReplyOptions
     GENERATED_BODY()
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Alternis|Dialogue")
-        TArray<FAlternisReply> Options;
+        TArray<FAlternisReplyOption> Options;
 };
 
 USTRUCT(BlueprintType)
@@ -55,11 +55,29 @@ struct FAlternisLine
 UENUM(BlueprintType)
 enum class EStepType : uint8
 {
-    None UMETA(DisplayName = ""),
-    Reply UMETA(DisplayName = "")
+    Done = STEP_RESULT_DONE UMETA(DisplayName = "Done"),
+    Options = STEP_RESULT_OPTIONS UMETA(DisplayName = "Options"),
+    Line = STEP_RESULT_LINE UMETA(DisplayName = "Line"),
+    FunctionCalled = STEP_RESULT_FUNCTION_CALLED UMETA(DisplayName = "FunctionCalled")
 };
 
-using FStepResult = TUnion<void, FAlternisReplyOptions, FAlternisLine, void>;
+USTRUCT(BlueprintType)
+struct FStepResult {
+    GENERATED_BODY()
+
+private:
+    StepResult data;
+
+public:
+    UFUNCTION(BlueprintCallable, Category="Alternis|Dialogue")
+        EStepType GetType();
+
+    UFUNCTION(BlueprintCallable, Category="Alternis|Dialogue")
+        FAlternisLine GetLine();
+
+    UFUNCTION(BlueprintCallable, Category="Alternis|Dialogue")
+        FAlternisReplyOptions GetReplyOptions();
+};
 
 class UAlternisDialogue;
 
