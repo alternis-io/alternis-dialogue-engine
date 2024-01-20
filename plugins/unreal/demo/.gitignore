@@ -2,7 +2,8 @@
 .vs/
 
 # VSCode
-.vscode/
+.vscode/compileCommands_*
+.vscode/c_cpp_properties.json
 
 # Compiled Object files
 *.slo
