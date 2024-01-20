@@ -26,6 +26,7 @@ struct FAlternisReplyOption
         int64 Id;
 };
 
+// FIXME: the type names are rather inconsistent between plugins and lib. Should fix.
 USTRUCT(BlueprintType)
 struct FAlternisReplyOptions
 {
@@ -61,22 +62,26 @@ enum class EStepType : uint8
     FunctionCalled = STEP_RESULT_FUNCTION_CALLED UMETA(DisplayName = "FunctionCalled")
 };
 
+// NOTE: blueprint accessible size-inefficient union
 USTRUCT(BlueprintType)
-struct FStepResult {
+struct FStepResult
+{
     GENERATED_BODY()
 
 private:
     StepResult data;
 
 public:
-    UFUNCTION(BlueprintCallable, Category="Alternis|Dialogue")
-        EStepType GetType();
+    FStepResult(StepResult);
 
-    UFUNCTION(BlueprintCallable, Category="Alternis|Dialogue")
-        FAlternisLine GetLine();
+    UPROPERTY(BlueprintReadonly, Category="Alternis|Dialogue")
+        EStepType Type;
 
-    UFUNCTION(BlueprintCallable, Category="Alternis|Dialogue")
-        FAlternisReplyOptions GetReplyOptions();
+    UPROPERTY(BlueprintReadonly, Category="Alternis|Dialogue")
+        FAlternisLine Line;
+
+    UPROPERTY(BlueprintReadonly, Category="Alternis|Dialogue", meta(Comment="Check Type to ensure this isn't empty"))
+        FAlternisReplyOptions ReplyOptions
 };
 
 class UAlternisDialogue;
@@ -86,7 +91,8 @@ DECLARE_MULTICAST_DYNAMIC_DELEGATE_OneParam(FAlternisCallbackSignature, UAlterni
 
 // NOTE: structs can't contain delegates so this is a full blown object :/
 UCLASS(BlueprintType)
-class UAlternisCallback : public UObject {
+class UAlternisCallback : public UObject
+{
     GENERATED_BODY()
 public:
 

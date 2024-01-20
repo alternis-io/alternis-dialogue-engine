@@ -6,38 +6,36 @@
 
 #include "alternis.h"
 
-EStepType FStepResult::GetType()
+FStepResult::FStepResult(StepResult nativeResult)
 {
-    return (EStepType) this->data.tag;
-}
 
-FAlternisLine FStepResult::GetLine()
-{
-    checkf(this->data.tag == STEP_RESULT_LINE);
+    auto result = FStepResult{ (EStepResult) nativeResult.tag };
 
-    return FAlternisLine(
-        FString(this->data.line.speaker.ptr, this->data.line.speaker.len),
-        FString(this->data.line.text.ptr, this->data.line.text.len),
-        FString(this->data.line.metadata.ptr, this->data.line.metadata.len),
-    );
-}
-
-FAlternisReplyOptions FStepResult::GetReplyOptions()
-{
-    checkf(this->data.tag == STEP_RESULT_OPTIONS);
-
-    TArray<FAlternisReplyOption> options;
-    options.Reserve(this->data.options.texts.len);
-
-    for (auto i = 0; i < this->data.options.texts.len; ++i)
+    if (result.tag == STEP_RESULT_LINE)
     {
-        options.Emplace(
-            FString(this->data.options.texts[i].ptr, this->data.options.texts[i].len),
-            this->data.options.ids[i]
+        result.Line = FAlternisLine(
+            FString(this->data.line.speaker.ptr, this->data.line.speaker.len),
+            FString(this->data.line.text.ptr, this->data.line.text.len),
+            FString(this->data.line.metadata.ptr, this->data.line.metadata.len),
         );
     }
+    else if (result.tag == STEP_RESULT_OPTIONS)
+    {
+        TArray<FAlternisReplyOption> options;
+        options.Reserve(this->data.options.texts.len);
 
-    return FAlternisReplyOptions{MoveTemp(options});
+        for (auto i = 0; i < this->data.options.texts.len; ++i)
+        {
+            options.Emplace(
+                FString(this->data.options.texts[i].ptr, this->data.options.texts[i].len),
+                this->data.options.ids[i]
+            );
+        }
+
+        result.ReplyOptions = FAlternisReplyOptions{MoveTemp(options)};
+    }
+
+    return result;
 }
 
 UAlternisDialogue::UAlternisDialogue()
