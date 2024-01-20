@@ -31,15 +31,15 @@ public class Alternis : ModuleRules
         string LibFileName
             = Target.Platform == UnrealTargetPlatform.Win64
             ? "alternis-x86_64-windows.lib"
-            : Target.Platform == UnrealTargetPlatform.Mac
+            : Target.Platform == UnrealTargetPlatform.Mac && Target.Architecture.StartsWith("x86_64")
             ? "libalternis-x86_64-macos.a"
-            : Target.Platform == UnrealTargetPlatform.MacArm
+            : Target.Platform == UnrealTargetPlatform.Mac && Target.Architecture.StartsWith("arm64")
             ? "libalternis-aarch64-macos.a"
             : null;
 
         if (LibFileName == null)
         {
-            throw System.NotSupportedException($"An unsupported platform '{Target.Platform}' was specified");
+            throw new System.NotSupportedException($"An unsupported platform '{Target.Platform}' was specified");
         }
 
         PublicAdditionalLibraries.Add(Path.Combine(AlternisPath, "zig-out/lib", LibFileName));
