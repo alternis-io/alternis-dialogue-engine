@@ -18,6 +18,9 @@ struct FAlternisReplyOption
 {
     GENERATED_BODY()
 
+    FAlternisReplyOption(): Text(), Id() {}
+    FAlternisReplyOption(const FString& Text, int64 Id): Text(Text), Id(Id) {}
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Alternis|Dialogue")
         FString Text;
 

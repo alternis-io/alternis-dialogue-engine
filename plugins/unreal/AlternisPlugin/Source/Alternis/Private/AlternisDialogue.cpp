@@ -4,6 +4,7 @@
 #include "HAL/PlatformFileManager.h"
 #include "Math/NumericLimits.h"
 #include "Templates/UnrealTypeTraits.h"
+#include "Containers/StringConv.h"
 
 #include "alternis.h"
 
@@ -139,10 +140,11 @@ void UAlternisDialogue::SetVariableString(const FName& name, const FString& valu
     int32 nameLen;
     GetAnsiBuffFromFName(name, &namePtr, &nameLen);
 
+    FTCHARToUTF8 asAscii(*value);
+
     // HACK: need to check FName garbage collection policy... I assume no gc per process atm unwisely
     this->StringVars.Add(name, value);
-
-    ade_dialogue_ctx_set_variable_string(this->ade_ctx, namePtr, nameLen, *value, value.Len());
+    ade_dialogue_ctx_set_variable_string(this->ade_ctx, namePtr, nameLen, asAscii.Get(), asAscii.Length());
 }
 
 void UAlternisDialogue::SetVariableBoolean(const FName& name, const bool value) {
