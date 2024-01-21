@@ -2,6 +2,9 @@
 #define ALTERNIS_LIB_DIALOGUE_H
 // not currently generated, that will/should be a zig feature. We should consider contributing it
 
+// FIXME: document everything here! it's a primary interface for many users
+// (or just contribute header generation to zig with comment copying)
+
 #ifdef __cplusplus
 extern "C" {
 #endif

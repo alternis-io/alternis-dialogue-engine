@@ -12,7 +12,7 @@
 
 #include "AlternisDialogue.generated.h"
 
-static_assert(sizeof(int64) == sizeof(size_t), "unexpected type");
+static_assert(sizeof(int64) == sizeof(size_t), "unexpected size_t size");
 
 USTRUCT(BlueprintType)
 struct FAlternisReplyOption
@@ -81,6 +81,8 @@ struct FStepResult
     /** Check Type before usage to be sure this isn't empty */
     UPROPERTY(BlueprintReadonly, Category="Alternis|Dialogue")
         FAlternisReplyOptions ReplyOptions;
+
+    FStepResult(): Type(), Line(), ReplyOptions() {}
 };
 
 class UAlternisDialogue;
@@ -113,9 +115,9 @@ class ALTERNIS_API UAlternisDialogue : public UActorComponent
 
     DialogueContext* ade_ctx = nullptr;
 
-    TList<FName, UAlternisCallback*> StringVars;
-    TList<FName, UAlternisCallback*> BooleanVars;
-    TMap<FName, UAlternisCallback*> Callbacks;
+    TList<TPair<FName, FString>> StringVars;
+    TList<TPair<FName, bool>> BooleanVars;
+    TList<TPair<FName, UAlternisCallback*>> Callbacks;
 
 public:
 
