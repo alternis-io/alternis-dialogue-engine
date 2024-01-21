@@ -38,11 +38,6 @@ FStepResult::FStepResult(StepResult nativeResult)
 
 UAlternisDialogue::UAlternisDialogue()
     : ade_ctx(nullptr)
-    // FIXME: no such thing as an empty TList?
-    , StringVars({FName{}, FString{}}, nullptr)
-    , BooleanVars({FName{}, false}, nullptr)
-    // FIXME: need to make sure to replace these?
-    , Callbacks({FName{}, nullptr}, nullptr)
     , ResourcePath("")
     , RandomSeed(0)
     , bInterpolate(true)
@@ -56,7 +51,6 @@ UAlternisDialogue::UAlternisDialogue()
 
 UAlternisDialogue::~UAlternisDialogue() {
     if (this->ade_ctx != nullptr) ade_dialogue_ctx_destroy(ade_ctx);
-    // FIXME: will TList deallocate our Callbacks?
 }
 
 static void _dispatch_callback(void* inCtx) {
@@ -108,55 +102,71 @@ void UAlternisDialogue::Reset() {
     ade_dialogue_ctx_reset(this->ade_ctx);
 }
 
-void UAlternisDialogue::Reply(size_t replyId) {
+void UAlternisDialogue::Reply(int64 replyId) {
     if (!ensureMsgf(this->ade_ctx != nullptr, TEXT("invalid alternis context")))
         return;
     ade_dialogue_ctx_reply(this->ade_ctx, replyId);
 }
 
-void UAlternisDialogue::SetVariableString(const FName& name, const FString value) {
+static void GetAnsiBuffFromFName(FName name, const ANSICHAR** outBuff, int32* outLen)
+{
+    const auto entry = FName::GetEntry(*name.ToEName());
+
+    // extremely questionable hack to access private instance variables of FNameEntry ;)
+    // checked on Unreal engine 5.0.1, this must be more strongly checked
+    struct FNameEntryHacked
+    {
+        #if WITH_CASE_PRESERVING_NAME
+            FNameEntryId ComparisonId;
+        #endif
+            FNameEntryHeader Header;
+            union
+            {
+                ANSICHAR	AnsiName[NAME_SIZE];
+                WIDECHAR	WideName[NAME_SIZE];
+            };
+    };
+
+    *outBuff = &reinterpret_cast<const FNameEntryHacked&>(entry).AnsiName[0];
+    *outLen = entry->GetNameLength();
+}
+
+void UAlternisDialogue::SetVariableString(const FName& name, const FString& value) {
     if (!ensureMsgf(this->ade_ctx != nullptr, TEXT("invalid alternis context")))
         return;
 
-    TCHAR name_buf;
-    int32 name_len = name.ToString(name_buf);
-    ade_dialogue_ctx_set_variable_string(
-        // NOTE: seemingly godot includes the null byte in the size
-        *this->ade_ctx, &name_buf, name_len,
-        *value, value.GetLength(),
-    );
+    const ANSICHAR* namePtr;
+    int32 nameLen;
+    GetAnsiBuffFromFName(name, &namePtr, &nameLen);
+
+    // HACK: need to check FName garbage collection policy... I assume no gc per process atm unwisely
+    this->StringVars.Add(name, value);
+
+    ade_dialogue_ctx_set_variable_string(this->ade_ctx, namePtr, nameLen, *value, value.Len());
 }
 
 void UAlternisDialogue::SetVariableBoolean(const FName& name, const bool value) {
     if (!ensureMsgf(this->ade_ctx != nullptr, TEXT("invalid alternis context")))
         return;
 
-    ade_dialogue_ctx_set_variable_boolean(
-        // NOTE: seemingly godot includes the null byte in the size
-        this->ade_ctx, name_data.utf8().get_data(), name_data.utf8().size() - 1,
-        value
-    );
+    const ANSICHAR* namePtr;
+    int32 nameLen;
+    GetAnsiBuffFromFName(name, &namePtr, &nameLen);
+
+    this->BooleanVars.Add(name, value);
+
+    ade_dialogue_ctx_set_variable_boolean(this->ade_ctx, namePtr, nameLen, value);
 }
 
-void UAlternisDialogue::SetCallback(const FName name, UFunction callable) {
+void UAlternisDialogue::SetCallback(const FName& name, UAlternisCallback* callable) {
     if (!ensureMsgf(this->ade_ctx != nullptr, TEXT("invalid alternis context")))
         return;
 
-    auto cb_info = new CallbackInfo;
-    *cb_info = CallbackInfo{
-        .owner = this,
-        .name = name,
-        .callable = callable,
-    };
+    const ANSICHAR* namePtr;
+    int32 nameLen;
+    GetAnsiBuffFromFName(name, &namePtr, &nameLen);
 
-    if (this->LastCallback != nullptr)
-        this->LastCallback->next = cb_info;
-    else
-        this->FirstCallback = cb_info;
+    this->Callbacks.Add(name, callable);
 
-    // FIXME: isn't this string temporary? doesn't that violate the ade_dialogue_ctx_set_callback API?
-    const FString name_data{name};
-    ade_dialogue_ctx_set_callback(
-        this->ade_ctx, name_data.utf8().get_data(), name_data.utf8().size() - 1, _dispatch_callback, cb_info
-    );
+    ade_dialogue_ctx_set_callback(this->ade_ctx, namePtr, nameLen, _dispatch_callback, callable);
 }

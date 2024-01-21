@@ -5,7 +5,6 @@
 #include "Components/ActorComponent.h"
 #include "Containers/Union.h"
 #include "Containers/Array.h"
-#include "Containers/List.h"
 #include "Containers/Map.h"
 #include "alternis.h"
 #include <stddef.h>
@@ -115,9 +114,11 @@ class ALTERNIS_API UAlternisDialogue : public UActorComponent
 
     DialogueContext* ade_ctx = nullptr;
 
-    TList<TPair<FName, FString>> StringVars;
-    TList<TPair<FName, bool>> BooleanVars;
-    TList<TPair<FName, UAlternisCallback*>> Callbacks;
+    // FIXME: probably insidious bugs to do with pointer invalidation since
+    // lib alternis is not id based yet
+    TMap<FName, FString> StringVars;
+    TMap<FName, bool> BooleanVars;
+    TMap<FName, UAlternisCallback*> Callbacks;
 
 public:
 
@@ -144,16 +145,15 @@ public:
     UFUNCTION(BlueprintCallable)
         void Reply(int64 replyId);
 
-    UFUNCTION(BlueprintPure)
-        FString GetVariableString(const FString& VariableName);
-
+    //UFUNCTION(BlueprintPure)
+        //FString GetVariableString(const FName& VariableName);
     UFUNCTION(BlueprintCallable)
-        void SetVariableString(const FString& VariableName, const FString& VariableValue);
+        void SetVariableString(const FName& VariableName, const FString& VariableValue);
 
     UFUNCTION(BlueprintPure)
-        bool GetVariableBoolean(const FString& VariableName);
+        bool GetVariableBoolean(const FName& VariableName);
     UFUNCTION(BlueprintCallable)
-        void SetVariableBoolean(const FString& VariableName, const bool VariableValue);
+        void SetVariableBoolean(const FName& VariableName, const bool VariableValue);
 
     UFUNCTION(BlueprintCallable)
         void SetCallback(const FName& CallbackName, UAlternisCallback* Callback);

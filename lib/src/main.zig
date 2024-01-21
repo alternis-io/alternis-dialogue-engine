@@ -440,6 +440,11 @@ pub const DialogueContext = struct {
         var_ptr.* = value;
     }
 
+    pub fn getVariableBoolean(self: *@This(), name: []const u8) bool {
+        return self.variables.booleans.get(name) orelse std.debug.panic("no such boolean variable: '{s}'", .{name});
+    }
+
+
     // FIXME: use a string-intern table and have id-based apis
     // FIXME: why not let the consumer own the memory?
     /// the passed in "value" is always copied
@@ -451,6 +456,10 @@ pub const DialogueContext = struct {
         const var_ptr = self.variables.strings.getPtr(name) orelse std.debug.panic("no such string variable: '{s}'", .{name});
 
         var_ptr.* = duped;
+    }
+
+    pub fn getVariableString(self: *@This(), name: []const u8) ?[]const u8 {
+        return self.variables.strings.get(name) orelse std.debug.panic("no such string variable: '{s}'", .{name});
     }
 
     /// if the current node is an options node, choose the reply

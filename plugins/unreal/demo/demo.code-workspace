@@ -1,21 +1,42 @@
 {
-	"folders": [
-		{
-			"name": "demo",
-			"path": "."
-		},
-		{
-			"name": "UE5",
-			"path": "C:\\Program Files\\Epic Games\\UE_5.0"
-		}
-	],
-	"settings": {
-		"typescript.tsc.autoDetect": "off"
-	},
-	"extensions": {
-		"recommendations": [
-			"ms-vscode.cpptools",
-			"ms-dotnettools.csharp"
-		]
-	}
+  "folders": [
+    {
+      "name": "demo",
+      "path": "."
+    },
+    {
+      "name": "UE5",
+      "path": "C:\\Program Files\\Epic Games\\UE_5.0"
+    }
+  ],
+  "settings": {
+    "typescript.tsc.autoDetect": "off",
+    "files.associations": {
+      "chrono": "cpp",
+      "functional": "cpp",
+      "optional": "cpp",
+      "system_error": "cpp",
+      "type_traits": "cpp",
+      "xlocmon": "cpp",
+      "xlocnum": "cpp",
+      "xtr1common": "cpp",
+      "__bit_reference": "cpp",
+      "__node_handle": "cpp",
+      "atomic": "cpp",
+      "bitset": "cpp",
+      "cstddef": "cpp",
+      "deque": "cpp",
+      "__memory": "cpp",
+      "filesystem": "cpp",
+      "limits": "cpp",
+      "locale": "cpp",
+      "random": "cpp",
+      "ratio": "cpp",
+      "tuple": "cpp",
+      "vector": "cpp"
+    }
+  },
+  "extensions": {
+    "recommendations": ["ms-vscode.cpptools", "ms-dotnettools.csharp"]
+  }
 }
