@@ -58,7 +58,7 @@ pub fn build(b: *std.Build) void {
         "x86_64-windows-msvc",
         "x86_64-macos",
         "aarch64-macos",
-        "x86_64-linux"
+        "x86_64-linux",
     };
 
     inline for (supported_platforms) |platform| {
@@ -78,9 +78,10 @@ pub fn build(b: *std.Build) void {
         const install_lib = b.addInstallArtifact(lib, .{});
 
         // FIXME: this doesn't work... the consumer must link with this
+        // FIXME: try this https://stackoverflow.com/questions/75185166/how-to-bundle-a-static-library-with-an-import-library-or-two-static-libraries
         if (std.mem.endsWith(u8, platform, "-msvc")) {
             //std.log.
-            lib.addLibraryPath(.{.path = "C:/Program Files (x86)/Windows Kits/10/Lib/10.0.18362.0/um/x64" });
+            lib.addLibraryPath(.{ .path = "C:/Program Files (x86)/Windows Kits/10/Lib/10.0.18362.0/um/x64" });
             lib.linkSystemLibrary2("ntdll", .{ .needed = true });
         }
 
