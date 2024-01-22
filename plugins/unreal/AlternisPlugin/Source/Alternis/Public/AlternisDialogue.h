@@ -148,13 +148,13 @@ public:
     UFUNCTION(BlueprintCallable)
         void Reply(int64 replyId);
 
-    //UFUNCTION(BlueprintPure)
-        //FString GetVariableString(const FName& VariableName);
+    UFUNCTION(BlueprintPure)
+        FString GetVariableString(const FName& VariableName, bool& exists);
     UFUNCTION(BlueprintCallable)
         void SetVariableString(const FName& VariableName, const FString& VariableValue);
 
     UFUNCTION(BlueprintPure)
-        bool GetVariableBoolean(const FName& VariableName);
+        bool GetVariableBoolean(const FName& VariableName, bool& exists);
     UFUNCTION(BlueprintCallable)
         void SetVariableBoolean(const FName& VariableName, const bool VariableValue);
 

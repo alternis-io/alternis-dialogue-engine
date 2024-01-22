@@ -132,6 +132,21 @@ static void GetAnsiBuffFromFName(FName name, const ANSICHAR** outBuff, int32* ou
     *outLen = entry->GetNameLength();
 }
 
+FString UAlternisDialogue::GetVariableString(const FName& name, bool& exists) {
+    auto found = this->StringVars.Find(name);
+
+    if (found == nullptr)
+    {
+        exists = false;
+        return FString{};
+    }
+    else
+    {
+        exists = true;
+        return *found;
+    }
+}
+
 void UAlternisDialogue::SetVariableString(const FName& name, const FString& value) {
     if (!ensureMsgf(this->ade_ctx != nullptr, TEXT("invalid alternis context")))
         return;
@@ -145,6 +160,21 @@ void UAlternisDialogue::SetVariableString(const FName& name, const FString& valu
     // HACK: need to check FName garbage collection policy... I assume no gc per process atm unwisely
     this->StringVars.Add(name, value);
     ade_dialogue_ctx_set_variable_string(this->ade_ctx, namePtr, nameLen, asAscii.Get(), asAscii.Length());
+}
+
+bool UAlternisDialogue::GetVariableBoolean(const FName& name, bool& exists) {
+    auto found = this->BooleanVars.Find(name);
+
+    if (found == nullptr)
+    {
+        exists = false;
+        return false;
+    }
+    else
+    {
+        exists = true;
+        return *found;
+    }
 }
 
 void UAlternisDialogue::SetVariableBoolean(const FName& name, const bool value) {

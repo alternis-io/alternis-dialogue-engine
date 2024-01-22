@@ -1,6 +1,8 @@
 using UnrealBuildTool;
 using System;
 using System.IO;
+using System.Diagnostics;
+using System.Collections.Generic;
 
 public class Alternis : ModuleRules
 {
@@ -29,7 +31,7 @@ public class Alternis : ModuleRules
 
         string LibFileName
             = Target.Platform == UnrealTargetPlatform.Win64
-            ? "alternis-x86_64-windows.lib"
+            ? "alternis-x86_64-windows-msvc.lib"
             : Target.Platform == UnrealTargetPlatform.Mac && Target.Architecture.StartsWith("x86_64")
             ? "libalternis-x86_64-macos.a"
             : Target.Platform == UnrealTargetPlatform.Mac && Target.Architecture.StartsWith("arm64")
@@ -42,5 +44,19 @@ public class Alternis : ModuleRules
         }
 
         PublicAdditionalLibraries.Add(Path.Combine(AlternisPath, "zig-out/lib", LibFileName));
+
+        if (Target.Platform == UnrealTargetPlatform.Win64)
+        {
+            var win10KitBase = "C:/Program Files (x86)/Windows Kits/10/Lib";
+            var win10KitVersions = new List<string>(Directory.EnumerateDirectories(win10KitBase));
+            if (win10KitVersions.Count >= 1)
+            {
+                PublicAdditionalLibraries.Add(Path.Combine(win10KitBase, win10KitVersions[0], "um/x64/ntdll.lib"));
+            }
+            else
+            {
+                throw new System.NotSupportedException($"Only windows versions containing ntdll.lib are supported");
+            }
+        }
     }
 }

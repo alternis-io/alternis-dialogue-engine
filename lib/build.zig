@@ -53,7 +53,13 @@ pub fn build(b: *std.Build) void {
 
     const all_step = b.step("all", "Build for all supported platforms");
 
-    const supported_platforms = [_][]const u8{ "x86_64-windows", "x86_64-macos", "aarch64-macos", "x86_64-linux" };
+    const supported_platforms = [_][]const u8{
+        // MSVC is the most common ABI on windows, needed to link into an e.g. Unreal Engine plugin
+        "x86_64-windows-msvc",
+        "x86_64-macos",
+        "aarch64-macos",
+        "x86_64-linux"
+    };
 
     inline for (supported_platforms) |platform| {
         const platform_target = CrossTarget.parse(.{ .arch_os_abi = platform }) catch unreachable;
@@ -68,8 +74,16 @@ pub fn build(b: *std.Build) void {
         lib.force_pic = true;
         // FIXME: avoid doing this except for the godot case,
         // otherwise roundq is undefined reference when linked into the gdextension
-        //lib.bundle_compiler_rt = true;
+        lib.bundle_compiler_rt = true;
         const install_lib = b.addInstallArtifact(lib, .{});
+
+        // FIXME: this doesn't work... the consumer must link with this
+        if (std.mem.endsWith(u8, platform, "-msvc")) {
+            //std.log.
+            lib.addLibraryPath(.{.path = "C:/Program Files (x86)/Windows Kits/10/Lib/10.0.18362.0/um/x64" });
+            lib.linkSystemLibrary2("ntdll", .{ .needed = true });
+        }
+
         all_step.dependOn(&install_lib.step);
     }
 
