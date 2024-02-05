@@ -444,7 +444,6 @@ pub const DialogueContext = struct {
         return self.variables.booleans.get(name) orelse std.debug.panic("no such boolean variable: '{s}'", .{name});
     }
 
-
     // FIXME: use a string-intern table and have id-based apis
     // FIXME: why not let the consumer own the memory?
     /// the passed in "value" is always copied
@@ -732,7 +731,7 @@ test "run large dialogue under zig api" {
     try t.expectEqual(@as(?usize, 0), ctx.current_node_index);
 
     const SetNameCallback = struct {
-        pub fn impl(payload: ?*anyopaque) void {
+        pub fn impl(payload: ?*anyopaque) callconv(.C) void {
             var dialogue_ctx: *DialogueContext = @alignCast(@ptrCast(payload orelse unreachable));
             dialogue_ctx.setVariableString("name", "Testy McTester");
         }
