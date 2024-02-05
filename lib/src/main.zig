@@ -151,11 +151,44 @@ const VariableType = enum {
     boolean,
 };
 
+// FIXME: separate file
+pub const StringIdPool = struct {
+    next: u32 = 0,
+    to_id: std.StringHashMap(u32),
+    from_id: std.AutoHashMap(u32, []const u8),
+
+    fn add(self: *@This(), str: []const u8, alloc: std.mem.Allocator) void {
+        const duped = alloc.dupe(u8, str);
+        self.to_id.put(duped, self.next) catch |e| std.debug.panic("put memory error: {}", .{e});
+        self.from_id.put(self.next, duped) catch |e| std.debug.panic("put memory error: {}", .{e});
+        self.next += 1;
+    }
+
+    fn free(self: @This(), alloc: std.mem.Allocator) void {
+        var iter = self.to_id.iterator();
+        while (iter.next()) |str| {
+            alloc.free(str.key);
+        }
+    }
+};
+
+test "StringIdPool" {
+    var pool = StringIdPool{};
+    defer pool.free();
+    pool.add("hello", t.allocator);
+    pool.add("world", t.allocator);
+}
+
 pub const DialogueContext = struct {
     // FIXME: deep copy the relevant results, this keeps unused json strings
     arena: std.heap.ArenaAllocator,
 
-    nodes: std.MultiArrayList(Node),
+    dialogues: struct {
+        nodes: std.MultiArrayList(Node),
+        // FIXME: optimize to fit in usize or even u32
+        current_node_index: ?usize,
+    },
+
     functions: std.StringHashMap(?Callback),
     variables: struct {
         strings: std.StringHashMap([]const u8),
@@ -163,10 +196,6 @@ pub const DialogueContext = struct {
         // maybe just a String->index hash map + dynamic bit set
         booleans: std.StringHashMap(bool),
     },
-
-    entry_node_index: usize,
-    // FIXME: optimize to fit in usize
-    current_node_index: ?usize,
 
     /// the pseudo-random number generator for the RandomSwitch
     rand: std.rand.DefaultPrng,
@@ -345,14 +374,15 @@ pub const DialogueContext = struct {
 
         r = Result(DialogueContext).ok(.{
             // FIXME:
-            .nodes = nodes,
+            .dialogues = .{
+                .nodes = nodes,
+                .current_node_index = 0,
+            },
             .functions = functions,
             .variables = .{
                 .strings = strings,
                 .booleans = booleans,
             },
-            .current_node_index = dialogue_data.entryId,
-            .entry_node_index = dialogue_data.entryId,
             .rand = std.rand.DefaultPrng.init(seed),
             .arena = arena,
             .step_options_buffer = step_options_buffer,
@@ -608,7 +638,6 @@ const ReplyJson = struct {
 
 const DialogueJson = struct {
     version: usize,
-    entryId: usize,
     nodes: []const struct {
         // FIXME: these must be in sync with the implementation of Node!
         // TODO: generate these from Node type...
