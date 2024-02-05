@@ -341,6 +341,8 @@ pub const DialogueContext = struct {
             break :_ time_seed;
         };
 
+        std.debug.assert(dialogue_data.entryId == 0);
+
         r = Result(DialogueContext).ok(.{
             // FIXME:
             .nodes = nodes,
@@ -388,8 +390,9 @@ pub const DialogueContext = struct {
         return if (self.current_node_index) |index| self.nodes.get(index) else null;
     }
 
-    pub fn reset(self: *@This()) void {
-        self.current_node_index = self.entry_node_index;
+    /// the entry node of a dialogue is always 0
+    pub fn reset(self: *@This(), node_index: usize) void {
+        self.current_node_index = node_index;
     }
 
     // FIXME: isn't this technically next node?
@@ -659,14 +662,12 @@ const DialogueJson = struct {
             return null;
         }
     },
-
     functions: []const struct { name: []const u8 } = &.{},
     participants: []const struct { name: []const u8 } = &.{},
-    variables: struct { boolean: []const struct {
-        name: []const u8,
-    } = &.{}, string: []const struct {
-        name: []const u8,
-    } = &.{} } = .{
+    variables: struct {
+        boolean: []const struct { name: []const u8 } = &.{},
+        string: []const struct { name: []const u8 } = &.{},
+    } = .{
         .boolean = &.{},
         .string = &.{},
     },

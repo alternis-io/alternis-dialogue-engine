@@ -1,9 +1,9 @@
-#ifndef ALTERNIS_LIB_DIALOGUE_H
-#define ALTERNIS_LIB_DIALOGUE_H
+#pragma once
+
 // not currently generated, that will/should be a zig feature. We should consider contributing it
 
 // FIXME: document everything here! it's a primary interface for many users
-// (or just contribute header generation to zig with comment copying)
+// (or just contribute header generation to zig with doc-comment copying)
 
 #ifdef __cplusplus
 extern "C" {
@@ -66,7 +66,7 @@ DialogueContext* ade_dialogue_ctx_create_json(
 );
 
 void ade_dialogue_ctx_destroy(DialogueContext* ctx);
-void ade_dialogue_ctx_reset(DialogueContext* ctx);
+void ade_dialogue_ctx_reset(DialogueContext* ctx, size_t node_index);
 void ade_dialogue_ctx_reply(DialogueContext* ctx, size_t reply_id);
 
 void ade_dialogue_ctx_set_callback(
@@ -108,5 +108,3 @@ void ade_dialogue_ctx_step(DialogueContext* ctx, StepResult* return_val);
 #ifdef __cplusplus
 } // extern "C"
 #endif
-
-#endif // ALTERNIS_LIB_DIALOGUE_H

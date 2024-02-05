@@ -16,12 +16,13 @@ const ConfigurableSimpleAlloc = @import("./simple_alloc.zig").ConfigurableSimple
 var configured_raw_alloc: ?ConfigurableSimpleAlloc = null;
 var alloc: std.mem.Allocator =
     if (builtin.os.tag == .freestanding and builtin.target.cpu.arch == .wasm32)
-        std.heap.wasm_allocator
-    else std.testing.failing_allocator;
+    std.heap.wasm_allocator
+else
+    std.testing.failing_allocator;
 
 export fn ade_set_alloc(
-    in_malloc: *const fn(usize) callconv(.C) ?*anyopaque,
-    in_free: *const fn(?*anyopaque) callconv(.C) void,
+    in_malloc: *const fn (usize) callconv(.C) ?*anyopaque,
+    in_free: *const fn (?*anyopaque) callconv(.C) void,
 ) void {
     configured_raw_alloc = ConfigurableSimpleAlloc.init(in_malloc, in_free);
     alloc = configured_raw_alloc.?.allocator();
@@ -32,20 +33,11 @@ pub fn setZigAlloc(in_alloc: std.mem.Allocator) void {
     alloc = in_alloc;
 }
 
-export fn ade_dialogue_ctx_create_json(
-    json_ptr: [*]const u8,
-    json_len: usize,
-    random_seed: u64,
-    no_interpolate: bool,
-    err: ?*?[*:0]const u8
-) ?*Api.DialogueContext {
+export fn ade_dialogue_ctx_create_json(json_ptr: [*]const u8, json_len: usize, random_seed: u64, no_interpolate: bool, err: ?*?[*:0]const u8) ?*Api.DialogueContext {
     const ctx_result = Api.DialogueContext.initFromJson(
         json_ptr[0..json_len],
         alloc,
-        .{
-            .random_seed = random_seed,
-            .no_interpolate = no_interpolate
-        },
+        .{ .random_seed = random_seed, .no_interpolate = no_interpolate },
     );
 
     // FIXME: better return err (e.g. this leaks)
@@ -54,8 +46,7 @@ export fn ade_dialogue_ctx_create_json(
         return null;
     }
 
-    var ctx_slot = alloc.create(Api.DialogueContext)
-        catch |e| std.debug.panic("alloc error: {}", .{e});
+    var ctx_slot = alloc.create(Api.DialogueContext) catch |e| std.debug.panic("alloc error: {}", .{e});
     ctx_slot.* = ctx_result.value;
 
     return ctx_slot;
@@ -67,9 +58,9 @@ export fn ade_dialogue_ctx_destroy(in_dialogue_ctx: ?*Api.DialogueContext) void 
     alloc.destroy(ctx);
 }
 
-export fn ade_dialogue_ctx_reset(in_dialogue_ctx: ?*Api.DialogueContext) void {
+export fn ade_dialogue_ctx_reset(in_dialogue_ctx: ?*Api.DialogueContext, node_index: usize) void {
     const ctx = in_dialogue_ctx orelse return;
-    ctx.reset();
+    ctx.reset(node_index);
 }
 
 export fn ade_dialogue_ctx_reply(in_dialogue_ctx: ?*Api.DialogueContext, reply_id: usize) void {
@@ -105,7 +96,7 @@ export fn ade_dialogue_ctx_set_callback(
     in_dialogue_ctx: ?*Api.DialogueContext,
     name: [*]const u8,
     len: usize,
-    function: *const fn(?*anyopaque) callconv(.C) void,
+    function: *const fn (?*anyopaque) callconv(.C) void,
     payload: ?*anyopaque,
 ) void {
     const ctx = in_dialogue_ctx orelse return;
@@ -115,12 +106,12 @@ export fn ade_dialogue_ctx_set_callback(
 /// the passed in pointers must exist as long as this is set
 export fn ade_dialogue_ctx_set_all_callbacks(
     in_dialogue_ctx: ?*Api.DialogueContext,
-    function: *const fn(*Api.DialogueContext.SetAllCallbacksPayload) callconv(.C) void,
+    function: *const fn (*Api.DialogueContext.SetAllCallbacksPayload) callconv(.C) void,
     /// stored into SetAllCallbacksPayload.inner_payload
     inner_payload: ?*anyopaque,
 ) void {
     const ctx = in_dialogue_ctx orelse return;
-    ctx.setAllCallbacks(.{.function = @ptrCast(function), .payload = inner_payload });
+    ctx.setAllCallbacks(.{ .function = @ptrCast(function), .payload = inner_payload });
 }
 
 const Line = extern struct {
