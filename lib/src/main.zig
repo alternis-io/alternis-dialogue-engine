@@ -8,6 +8,7 @@ const OptSlice = @import("./slice.zig").OptSlice;
 const MutSlice = @import("./slice.zig").MutSlice;
 const FileBuffer = @import("./FileBuffer.zig");
 const text_interp = @import("./text_interp.zig");
+const usz = @import("./config.zig").usz;
 
 // FIXME: only in wasm
 extern fn _debug_print([*]const u8, len: usize) void;
@@ -151,39 +152,11 @@ const VariableType = enum {
     boolean,
 };
 
-// FIXME: separate file
-pub const StringIdPool = struct {
-    next: u32 = 0,
-    to_id: std.StringHashMap(u32),
-    from_id: std.AutoHashMap(u32, []const u8),
-
-    fn add(self: *@This(), str: []const u8, alloc: std.mem.Allocator) void {
-        const duped = alloc.dupe(u8, str);
-        self.to_id.put(duped, self.next) catch |e| std.debug.panic("put memory error: {}", .{e});
-        self.from_id.put(self.next, duped) catch |e| std.debug.panic("put memory error: {}", .{e});
-        self.next += 1;
-    }
-
-    fn free(self: @This(), alloc: std.mem.Allocator) void {
-        var iter = self.to_id.iterator();
-        while (iter.next()) |str| {
-            alloc.free(str.key);
-        }
-    }
-};
-
-test "StringIdPool" {
-    var pool = StringIdPool{};
-    defer pool.free();
-    pool.add("hello", t.allocator);
-    pool.add("world", t.allocator);
-}
-
 pub const DialogueContext = struct {
     // FIXME: deep copy the relevant results, this keeps unused json strings
     arena: std.heap.ArenaAllocator,
 
-    dialogues: struct {
+    dialogues: []const struct {
         nodes: std.MultiArrayList(Node),
         // FIXME: optimize to fit in usize or even u32
         current_node_index: ?usize,
@@ -370,8 +343,6 @@ pub const DialogueContext = struct {
             break :_ time_seed;
         };
 
-        std.debug.assert(dialogue_data.entryId == 0);
-
         r = Result(DialogueContext).ok(.{
             // FIXME:
             .dialogues = .{
@@ -420,9 +391,18 @@ pub const DialogueContext = struct {
         return if (self.current_node_index) |index| self.nodes.get(index) else null;
     }
 
-    /// the entry node of a dialogue is always 0
-    pub fn reset(self: *@This(), node_index: usize) void {
+    pub fn getLabelId(self: *@This(), str: []const u8) u32 {
+        return self.string_pool.get(str);
+    }
+
+    /// nodeLabel
+    pub fn resetToLabel(self: *@This(), dialogue_id: usize, label_id: usize) void {
         self.current_node_index = node_index;
+    }
+
+    /// the entry node of a dialogue is always 0
+    pub fn reset(self: *@This(), dialogue_id: usize, node_index: usize) void {
+        self.dialogues[dialogue_id].current_node_index = node_index;
     }
 
     // FIXME: isn't this technically next node?
