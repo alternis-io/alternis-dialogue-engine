@@ -16,20 +16,20 @@ fn get(self: *@This(), str: []const u8) ?usz {
     return self.to_id.get(str);
 }
 
-fn free(self: *@This(), alloc: std.mem.Allocator) void {
+fn deinit(self: *@This(), alloc: std.mem.Allocator) void {
     var iter = self.to_id.iterator();
     while (iter.next()) |str| {
         alloc.free(str.key_ptr.*);
     }
-    self.to_id.clearAndFree(alloc);
-    self.from_id.clearAndFree(alloc);
+    self.to_id.deinit(alloc);
+    self.from_id.deinit(alloc);
 }
 
 const t = std.testing;
 
 test {
     var pool = @This(){};
-    defer pool.free(t.allocator);
+    defer pool.deinit(t.allocator);
     try pool.put("hello", t.allocator);
     try pool.put("world", t.allocator);
     try t.expectEqual(pool.get("world"), 1);

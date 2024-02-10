@@ -9,6 +9,7 @@ const MutSlice = @import("./slice.zig").MutSlice;
 const FileBuffer = @import("./FileBuffer.zig");
 const text_interp = @import("./text_interp.zig");
 const usz = @import("./config.zig").usz;
+const StringPool = @import("./StringPool.zig");
 
 // FIXME: only in wasm
 extern fn _debug_print([*]const u8, len: usize) void;
@@ -156,10 +157,13 @@ pub const DialogueContext = struct {
     // FIXME: deep copy the relevant results, this keeps unused json strings
     arena: std.heap.ArenaAllocator,
 
+    string_pool: StringPool,
+
     dialogues: []const struct {
         nodes: std.MultiArrayList(Node),
         // FIXME: optimize to fit in usize or even u32
         current_node_index: ?usize,
+        label_to_node_ids: std.AutoHashMapUnmanaged(usz, usz),
     },
 
     functions: std.StringHashMap(?Callback),
@@ -365,39 +369,43 @@ pub const DialogueContext = struct {
     }
 
     pub fn deinit(self: *@This(), alloc: std.mem.Allocator) void {
-        // FIXME: nodes should encapsulate their own freeing logic better
-        {
-            // FIXME: probably better to iterate on .data simultaneously
-            const nodes_slice = self.nodes.slice();
-            for (nodes_slice.items(.tags), 0..) |tag, index| {
-                if (tag != .reply) continue;
-                var value = nodes_slice.get(index);
-                alloc.free(value.reply.conditions);
+        for (self.dialogues) |dialogue| {
+            // FIXME: nodes should encapsulate their own freeing logic better
+            {
+                // FIXME: probably better to iterate on .data simultaneously
+                const nodes_slice = dialogue.nodes.slice();
+                for (nodes_slice.items(.tags), 0..) |tag, index| {
+                    if (tag != .reply) continue;
+                    var value = nodes_slice.get(index);
+                    alloc.free(value.reply.conditions);
+                }
             }
-        }
 
-        // no need to free self.step_result_buffer, it uses the arena
-        self.nodes.deinit(alloc);
+            // no need to free self.step_result_buffer, it uses the arena
+            dialogue.nodes.deinit(alloc);
+        }
         alloc.free(self.step_options_buffer.toZig());
         alloc.free(self.step_option_ids_buffer.toZig());
-        self.functions.deinit();
         // NOTE: keys and string values are in the arena
+        self.functions.deinit();
         self.variables.booleans.deinit();
         self.variables.strings.deinit();
         self.arena.deinit();
     }
 
-    fn currentNode(self: @This()) ?Node {
-        return if (self.current_node_index) |index| self.nodes.get(index) else null;
-    }
-
-    pub fn getLabelId(self: *@This(), str: []const u8) u32 {
-        return self.string_pool.get(str);
+    fn currentNode(self: @This(), dialogue_id: usz) ?Node {
+        return if (self.dialogues[dialogue_id].current_node_index) |index| self.nodes.get(index) else null;
     }
 
     /// nodeLabel
-    pub fn resetToLabel(self: *@This(), dialogue_id: usize, label_id: usize) void {
-        self.current_node_index = node_index;
+    pub fn getLabelId(self: *@This(), dialogue_id: usize, label_id: usize) ?usz {
+        return self.dialogues[dialogue_id].label_to_node_ids.get(label_id);
+    }
+
+    /// nodeLabel
+    pub fn resetToLabel(self: *@This(), dialogue_id: usize, label_id: usize) ?void {
+        const node_index = self.getLabelId(label_id) orelse return null;
+        self.dialogues[dialogue_id].current_node_index = node_index;
     }
 
     /// the entry node of a dialogue is always 0
@@ -407,8 +415,8 @@ pub const DialogueContext = struct {
 
     // FIXME: isn't this technically next node?
     /// returns -1 if current node index is invalid. 0 is the entry node
-    pub fn getCurrentNodeIndex(self: *@This()) i32 {
-        return @intCast(self.current_node_index orelse -1);
+    pub fn getCurrentNodeIndex(self: *@This(), dialogue_id: usz) i32 {
+        return @intCast(self.dialogues[dialogue_id].current_node_index orelse -1);
     }
 
     pub fn setCallback(self: *@This(), name: []const u8, callback: Callback) void {
@@ -475,30 +483,32 @@ pub const DialogueContext = struct {
     }
 
     /// if the current node is an options node, choose the reply
-    pub fn reply(self: *@This(), reply_index: usize) void {
-        const currNode = self.currentNode() orelse return;
+    pub fn reply(self: *@This(), dialogue_id: usz, reply_index: usize) void {
+        const currNode = self.currentNode(dialogue_id) orelse return;
         std.debug.assert(currNode == .reply);
         {
             @setRuntimeSafety(true);
-            self.current_node_index = currNode.reply.nexts[reply_index].toOptionalInt(usize);
+            self.dialogues[dialogue_id].current_node_index = currNode.reply.nexts[reply_index].toOptionalInt(usize);
         }
     }
 
-    pub fn step(self: *@This()) StepResult {
-        if (self.do_interpolate) if (self.step_result_buffer) |*prev_step_result|
-            prev_step_result.free(self.arena.allocator());
+    pub fn step(self: *@This(), dialogue_id: []const u8) StepResult {
+        if (self.do_interpolate and self.step_result_buffer != null)
+            self.step_result_buffer.?.free(self.arena.allocator());
+
+        const dialogue = self.dialogues[dialogue_id];
 
         // all returns in this function must set and then return this variable
         var result: StepResult = undefined;
         defer self.step_result_buffer = result;
 
         while (true) {
-            const current_node = self.currentNode() orelse return .{ .tag = .done };
+            const current_node = self.currentNode(dialogue_id) orelse return .{ .tag = .done };
 
             switch (current_node) {
                 .line => |v| {
                     // FIXME: technically this seems to mean nextNodeIndex!
-                    self.current_node_index = v.next.toOptionalInt(usize);
+                    dialogue.current_node_index = v.next.toOptionalInt(usize);
                     result = .{ .tag = .line, .data = .{ .line = if (self.do_interpolate)
                         v.data.interpolate(self.arena.allocator(), &self.variables.strings)
                     else
@@ -520,7 +530,7 @@ pub const DialogueContext = struct {
 
                     // just in case of fp error
                     std.debug.assert(v.nexts.len >= 1);
-                    self.current_node_index = v.nexts[v.nexts.len - 1].toOptionalInt(usize);
+                    dialogue.current_node_index = v.nexts[v.nexts.len - 1].toOptionalInt(usize);
                 },
                 .reply => |v| {
                     std.debug.assert(v.texts.len <= self.step_options_buffer.len);
@@ -541,6 +551,8 @@ pub const DialogueContext = struct {
                         }
 
                         self.step_options_buffer.toZig()[slot_index] = if (self.do_interpolate)
+                            // FIXME/LEAK: should not use arena here! arena allocator won't free it
+                            // until dialogue ends, which means garbage grows indefinitely!
                             text.interpolate(self.arena.allocator(), &self.variables.strings)
                         else
                             text;
@@ -560,17 +572,17 @@ pub const DialogueContext = struct {
                     self.variables.booleans.put(v.boolean_var_name, false)
                     // FIXME: validate lock variable names at start time
                     catch |e| std.debug.panic("error getting variable '{s}' to lock: {}", .{ v.boolean_var_name, e });
-                    self.current_node_index = v.next.toOptionalInt(usize);
+                    dialogue.current_node_index = v.next.toOptionalInt(usize);
                 },
                 .unlock => |v| {
                     self.variables.booleans.put(v.boolean_var_name, true)
                     // FIXME: validate lock variable names at start time
                     catch |e| std.debug.panic("error getting variable '{s}' to lock: {}", .{ v.boolean_var_name, e });
-                    self.current_node_index = v.next.toOptionalInt(usize);
+                    dialogue.current_node_index = v.next.toOptionalInt(usize);
                 },
                 .call => |v| {
                     if (self.functions.get(v.function_name)) |stored_cb| if (stored_cb) |cb| cb.function(cb.payload);
-                    self.current_node_index = v.next.toOptionalInt(usize);
+                    dialogue.current_node_index = v.next.toOptionalInt(usize);
                     // the user must call 'step' again to get the real step
                     result = .{ .tag = .function_called };
                     return result;
