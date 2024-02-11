@@ -1,6 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const t = std.testing;
+const usz = @import("./config.zig").usz;
 
 extern fn _debug_print([*]const u8, len: usize) void;
 // fn _debug_print(ptr: [*]const u8, len: usize) void {
@@ -20,6 +21,7 @@ var alloc: std.mem.Allocator =
 else
     std.testing.failing_allocator;
 
+// FIXME: read https://nullprogram.com/blog/2023/12/17/
 export fn ade_set_alloc(
     in_malloc: *const fn (usize) callconv(.C) ?*anyopaque,
     in_free: *const fn (?*anyopaque) callconv(.C) void,
@@ -58,14 +60,19 @@ export fn ade_dialogue_ctx_destroy(in_dialogue_ctx: ?*Api.DialogueContext) void 
     alloc.destroy(ctx);
 }
 
-export fn ade_dialogue_ctx_reset(in_dialogue_ctx: ?*Api.DialogueContext, node_index: usize) void {
+export fn ade_dialogue_ctx_reset(in_dialogue_ctx: ?*Api.DialogueContext, dialogue_id: usize, node_index: usize) void {
     const ctx = in_dialogue_ctx orelse return;
-    ctx.reset(node_index);
+    ctx.reset(node_index, dialogue_id);
 }
 
-export fn ade_dialogue_ctx_reply(in_dialogue_ctx: ?*Api.DialogueContext, reply_id: usize) void {
+export fn ade_dialogue_ctx_reply(in_dialogue_ctx: ?*Api.DialogueContext, dialogue_id: usize, reply_id: usize) void {
     const ctx = in_dialogue_ctx orelse return;
-    ctx.reply(reply_id);
+    ctx.reply(reply_id, dialogue_id);
+}
+
+export fn ade_dialogue_ctx_get_node_by_label(in_dialogue_ctx: ?*Api.DialogueContext, dialogue_id: usize, label_ptr: *const u8, label_len: usize) usize {
+    const ctx = in_dialogue_ctx orelse return;
+    ctx.getNodeByLabel(dialogue_id, label_ptr[0..label_len]) orelse unreachable; // FIXME: return -1?
 }
 
 /// the passed in pointers must exist as long as this is set

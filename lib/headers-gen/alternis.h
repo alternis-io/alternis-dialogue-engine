@@ -65,9 +65,10 @@ DialogueContext* ade_dialogue_ctx_create_json(
     const char** err
 );
 
-void ade_dialogue_ctx_destroy(DialogueContext* ctx);
-void ade_dialogue_ctx_reset(DialogueContext* ctx, size_t node_index);
-void ade_dialogue_ctx_reply(DialogueContext* ctx, size_t reply_id);
+void ade_dialogue_ctx_destroy(DialogueContext* ctx, uint32_t dialogue_id);
+void ade_dialogue_ctx_reset(DialogueContext* ctx, uint32_t dialogue_id, size_t node_index);
+void ade_dialogue_ctx_reply(DialogueContext* ctx, uint32_t dialogue_id, size_t reply_id);
+size_t ade_dialogue_ctx_get_node_by_label(DialogueContext* ctx, uint32_t dialogue_id, const char* label_ptr, size_t label_len);
 
 void ade_dialogue_ctx_set_callback(
     DialogueContext* ctx,
@@ -103,7 +104,7 @@ void ade_dialogue_ctx_set_variable_string(
     size_t value_len
 );
 
-void ade_dialogue_ctx_step(DialogueContext* ctx, StepResult* return_val);
+void ade_dialogue_ctx_step(DialogueContext* ctx, uint32_t dialogue_id, StepResult* return_val);
 
 #ifdef __cplusplus
 } // extern "C"

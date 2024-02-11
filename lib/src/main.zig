@@ -163,7 +163,7 @@ pub const DialogueContext = struct {
         nodes: std.MultiArrayList(Node),
         // FIXME: optimize to fit in usize or even u32
         current_node_index: ?usize,
-        label_to_node_ids: std.AutoHashMapUnmanaged(usz, usz),
+        label_to_node_ids: std.StringHashMapUnmanaged(usz),
     },
 
     functions: std.StringHashMap(?Callback),
@@ -397,15 +397,8 @@ pub const DialogueContext = struct {
         return if (self.dialogues[dialogue_id].current_node_index) |index| self.nodes.get(index) else null;
     }
 
-    /// nodeLabel
-    pub fn getLabelId(self: *@This(), dialogue_id: usize, label_id: usize) ?usz {
-        return self.dialogues[dialogue_id].label_to_node_ids.get(label_id);
-    }
-
-    /// nodeLabel
-    pub fn resetToLabel(self: *@This(), dialogue_id: usize, label_id: usize) ?void {
-        const node_index = self.getLabelId(label_id) orelse return null;
-        self.dialogues[dialogue_id].current_node_index = node_index;
+    fn getNodeByLabel(self: *@This(), dialogue_id: usize, label: []const u8) ?usz {
+        return self.dialogues[dialogue_id].label_to_node_ids.get(label);
     }
 
     /// the entry node of a dialogue is always 0
