@@ -70,9 +70,9 @@ export fn ade_dialogue_ctx_reply(in_dialogue_ctx: ?*Api.DialogueContext, dialogu
     ctx.reply(reply_id, dialogue_id);
 }
 
-export fn ade_dialogue_ctx_get_node_by_label(in_dialogue_ctx: ?*Api.DialogueContext, dialogue_id: usize, label_ptr: *const u8, label_len: usize) usize {
-    const ctx = in_dialogue_ctx orelse return;
-    ctx.getNodeByLabel(dialogue_id, label_ptr[0..label_len]) orelse unreachable; // FIXME: return -1?
+export fn ade_dialogue_ctx_get_node_by_label(in_dialogue_ctx: ?*Api.DialogueContext, dialogue_id: usize, label_ptr: [*]const u8, label_len: usize) usize {
+    const ctx = in_dialogue_ctx orelse unreachable;
+    return ctx.getNodeByLabel(dialogue_id, label_ptr[0..label_len]) orelse unreachable; // FIXME: return -1?
 }
 
 /// the passed in pointers must exist as long as this is set
@@ -135,9 +135,9 @@ const Line = extern struct {
     }
 };
 
-export fn ade_dialogue_ctx_step(dialogue_ctx: *Api.DialogueContext, result_loc: ?*Api.DialogueContext.StepResult) void {
+export fn ade_dialogue_ctx_step(dialogue_ctx: *Api.DialogueContext, dialogue_id: usz, result_loc: ?*Api.DialogueContext.StepResult) void {
     std.debug.assert(result_loc != null);
-    result_loc.?.* = dialogue_ctx.step();
+    result_loc.?.* = dialogue_ctx.step(dialogue_id);
 }
 
 // for now this just invokes failing allocator and panics...

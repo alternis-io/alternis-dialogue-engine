@@ -153,18 +153,20 @@ const VariableType = enum {
     boolean,
 };
 
+const Dialogue = struct {
+    nodes: std.MultiArrayList(Node),
+    // FIXME: optimize to fit in usize or even u32
+    current_node_index: ?usize,
+    label_to_node_ids: std.StringHashMapUnmanaged(usz),
+};
+
 pub const DialogueContext = struct {
     // FIXME: deep copy the relevant results, this keeps unused json strings
     arena: std.heap.ArenaAllocator,
 
     string_pool: StringPool,
 
-    dialogues: []const struct {
-        nodes: std.MultiArrayList(Node),
-        // FIXME: optimize to fit in usize or even u32
-        current_node_index: ?usize,
-        label_to_node_ids: std.StringHashMapUnmanaged(usz),
-    },
+    dialogues: []Dialogue,
 
     functions: std.StringHashMap(?Callback),
     variables: struct {
@@ -250,7 +252,7 @@ pub const DialogueContext = struct {
         var json_scanner = json.Scanner.initCompleteInput(arena_alloc, json_text);
         json_scanner.enableDiagnostics(&json_diagnostics);
 
-        const dialogue_data = json.parseFromTokenSourceLeaky(DialogueJson, arena_alloc, &json_scanner, .{
+        const data = json.parseFromTokenSourceLeaky(DialogueJson, arena_alloc, &json_scanner, .{
             .ignore_unknown_fields = true,
             .allocate = .alloc_always,
         }) catch |e| {
@@ -258,79 +260,100 @@ pub const DialogueContext = struct {
             return r;
         };
 
-        if (dialogue_data.version != 1) {
+        if (data.version != 1) {
             r = Result(DialogueContext).fmt_err(alloc, "unknown file version. Only version '1' is supported by this engine", .{});
             return r;
         }
 
-        var nodes = std.MultiArrayList(Node){};
-        defer if (r.is_err()) nodes.deinit(alloc);
-        nodes.ensureTotalCapacity(alloc, dialogue_data.nodes.len) catch |e| {
-            r = Result(DialogueContext).fmt_err(alloc, "{}", .{e});
-            return r;
-        };
-
         var booleans = std.StringHashMap(bool).init(alloc);
-        booleans.ensureTotalCapacity(@intCast(dialogue_data.variables.boolean.len)) catch |e| {
+        booleans.ensureTotalCapacity(@intCast(data.variables.boolean.len)) catch |e| {
             r = Result(DialogueContext).fmt_err(alloc, "{}", .{e});
             return r;
         };
         // FIXME: this is super broken methinks, both StringHashMap says key memory is owned by caller, which means gets will never work since
         // they don't have access to the mmaped JSON
-        for (dialogue_data.variables.boolean) |json_var|
+        for (data.variables.boolean) |json_var|
             booleans.put(json_var.name, false) catch |e| std.debug.panic("put memory error: {}", .{e});
 
         var strings = std.StringHashMap([]const u8).init(alloc);
-        strings.ensureTotalCapacity(@intCast(dialogue_data.variables.string.len)) catch |e| {
+        strings.ensureTotalCapacity(@intCast(data.variables.string.len)) catch |e| {
             r = Result(DialogueContext).fmt_err(alloc, "{}", .{e});
             return r;
         };
-        for (dialogue_data.variables.string) |json_var| {
+        for (data.variables.string) |json_var| {
             strings.put(json_var.name, "<UNSET>") catch |e| std.debug.panic("put memory error: {}", .{e});
         }
 
         var functions = std.StringHashMap(?Callback).init(alloc);
-        functions.ensureTotalCapacity(@intCast(dialogue_data.functions.len)) catch |e| {
+        functions.ensureTotalCapacity(@intCast(data.functions.len)) catch |e| {
             r = Result(DialogueContext).fmt_err(alloc, "{}", .{e});
             return r;
         };
-        for (dialogue_data.functions) |json_func|
+        for (data.functions) |json_func|
             functions.put(json_func.name, null) catch |e| std.debug.panic("put memory error: {}", .{e});
 
         var max_option_count: usize = 0;
 
-        for (dialogue_data.nodes, 0..) |json_node, i| {
-            if (json_node.toNode(alloc, &booleans)) |node| {
-                nodes.append(alloc, node) catch |e| {
-                    r = Result(DialogueContext).fmt_err(alloc, "{}", .{e});
-                    return r;
-                };
+        var dialogues = arena_alloc.alloc(Dialogue, data.dialogues.len) catch |e| {
+            r = Result(DialogueContext).fmt_err(alloc, "{}", .{e});
+            return r;
+        };
 
-                switch (node) {
-                    inline .reply, .random_switch => |v| {
-                        for (v.nexts) |maybe_next| {
-                            if (maybe_next.toOptionalInt(usize)) |next| if (next >= dialogue_data.nodes.len) {
-                                r = Result(DialogueContext).fmt_err(alloc, "bad next node '{}' on node '{}'", .{ next, i });
-                                return r;
-                            };
-                        }
+        var string_pool = StringPool{};
 
-                        switch (node) {
-                            .reply => |as_reply| {
-                                max_option_count = @max(as_reply.texts.len, max_option_count);
-                            },
-                            else => {},
-                        }
-                    },
-                    inline else => |n| if (n.next.toOptionalInt(usize)) |next| if (next >= dialogue_data.nodes.len) {
-                        r = Result(DialogueContext).fmt_err(alloc, "bad next node '{}' on node '{}'", .{ next, i });
-                        return r;
-                    },
-                }
-            } else {
-                r = Result(DialogueContext).fmt_err(alloc, "invalid node (index={}) without type or data", .{i});
+        for (data.dialogues, dialogues) |dialogue, *out_dialogue| {
+            var nodes = std.MultiArrayList(Node){};
+            defer if (r.is_err()) nodes.deinit(alloc);
+            nodes.ensureTotalCapacity(alloc, dialogue.nodes.len) catch |e| {
+                r = Result(DialogueContext).fmt_err(alloc, "{}", .{e});
                 return r;
+            };
+
+            var label_to_node_ids = std.StringHashMapUnmanaged(usz){};
+            label_to_node_ids.ensureTotalCapacity(alloc, dialogue.nodes.len) catch |e| {
+                r = Result(DialogueContext).fmt_err(alloc, "{}", .{e});
+                return r;
+            };
+
+            for (dialogue.nodes, 0..) |json_node, i| {
+                if (json_node.toNode(alloc, &booleans)) |node| {
+                    nodes.append(alloc, node) catch |e| {
+                        r = Result(DialogueContext).fmt_err(alloc, "{}", .{e});
+                        return r;
+                    };
+
+                    switch (node) {
+                        inline .reply, .random_switch => |v| {
+                            for (v.nexts) |maybe_next| {
+                                if (maybe_next.toOptionalInt(usize)) |next| if (next >= dialogue.nodes.len) {
+                                    r = Result(DialogueContext).fmt_err(alloc, "bad next node '{}' on node '{}'", .{ next, i });
+                                    return r;
+                                };
+                            }
+
+                            switch (node) {
+                                .reply => |as_reply| {
+                                    max_option_count = @max(as_reply.texts.len, max_option_count);
+                                },
+                                else => {},
+                            }
+                        },
+                        inline else => |n| if (n.next.toOptionalInt(usize)) |next| if (next >= dialogue.nodes.len) {
+                            r = Result(DialogueContext).fmt_err(alloc, "bad next node '{}' on node '{}'", .{ next, i });
+                            return r;
+                        },
+                    }
+                } else {
+                    r = Result(DialogueContext).fmt_err(alloc, "invalid node (index={}) without type or data", .{i});
+                    return r;
+                }
             }
+
+            out_dialogue.* = .{
+                .nodes = nodes,
+                .current_node_index = 0,
+                .label_to_node_ids = label_to_node_ids,
+            };
         }
 
         var step_options_buffer = MutSlice(Line).fromZig(alloc.alloc(Line, max_option_count) catch unreachable);
@@ -349,10 +372,8 @@ pub const DialogueContext = struct {
 
         r = Result(DialogueContext).ok(.{
             // FIXME:
-            .dialogues = .{
-                .nodes = nodes,
-                .current_node_index = 0,
-            },
+            .string_pool = string_pool,
+            .dialogues = dialogues,
             .functions = functions,
             .variables = .{
                 .strings = strings,
@@ -369,7 +390,7 @@ pub const DialogueContext = struct {
     }
 
     pub fn deinit(self: *@This(), alloc: std.mem.Allocator) void {
-        for (self.dialogues) |dialogue| {
+        for (self.dialogues) |*dialogue| {
             // FIXME: nodes should encapsulate their own freeing logic better
             {
                 // FIXME: probably better to iterate on .data simultaneously
@@ -394,10 +415,14 @@ pub const DialogueContext = struct {
     }
 
     fn currentNode(self: @This(), dialogue_id: usz) ?Node {
-        return if (self.dialogues[dialogue_id].current_node_index) |index| self.nodes.get(index) else null;
+        const dialogue = self.dialogues[dialogue_id];
+        return if (dialogue.current_node_index) |index|
+            dialogue.nodes.get(index)
+        else
+            null;
     }
 
-    fn getNodeByLabel(self: *@This(), dialogue_id: usize, label: []const u8) ?usz {
+    pub fn getNodeByLabel(self: *@This(), dialogue_id: usize, label: []const u8) ?usz {
         return self.dialogues[dialogue_id].label_to_node_ids.get(label);
     }
 
@@ -485,11 +510,11 @@ pub const DialogueContext = struct {
         }
     }
 
-    pub fn step(self: *@This(), dialogue_id: []const u8) StepResult {
+    pub fn step(self: *@This(), dialogue_id: usz) StepResult {
         if (self.do_interpolate and self.step_result_buffer != null)
             self.step_result_buffer.?.free(self.arena.allocator());
 
-        const dialogue = self.dialogues[dialogue_id];
+        var dialogue = self.dialogues[dialogue_id];
 
         // all returns in this function must set and then return this variable
         var result: StepResult = undefined;
@@ -516,7 +541,7 @@ pub const DialogueContext = struct {
                         acc += chance_count;
                         const chance_proportion = @as(f64, @floatFromInt(acc)) / @as(f64, @floatFromInt(v.total_chances));
                         if (shot < chance_proportion) {
-                            self.current_node_index = next.toOptionalInt(usize);
+                            dialogue.current_node_index = next.toOptionalInt(usize);
                             break;
                         }
                     }
@@ -623,59 +648,62 @@ const ReplyJson = struct {
 
 const DialogueJson = struct {
     version: usize,
-    nodes: []const struct {
-        // FIXME: these must be in sync with the implementation of Node!
-        // TODO: generate these from Node type...
-        // NOTE: this scales poorly of course, custom json parsing would probably be better
-        line: ?@typeInfo(Node).Union.fields[0].type = null,
-        random_switch: ?struct {
-            nexts: []const Next,
-            chances: []const u32,
-        } = null,
-        // FIXME: update json schema
-        reply: ?ReplyJson = null,
-        lock: ?@typeInfo(Node).Union.fields[3].type = null,
-        unlock: ?@typeInfo(Node).Union.fields[4].type = null,
-        call: ?@typeInfo(Node).Union.fields[5].type = null,
+    dialogues: []const struct {
+        name: []const u8,
+        nodes: []const struct {
+            // FIXME: these must be in sync with the implementation of Node!
+            // TODO: generate these from Node type...
+            // NOTE: this scales poorly of course, custom json parsing would probably be better
+            line: ?@typeInfo(Node).Union.fields[0].type = null,
+            random_switch: ?struct {
+                nexts: []const Next,
+                chances: []const u32,
+            } = null,
+            // FIXME: update json schema
+            reply: ?ReplyJson = null,
+            lock: ?@typeInfo(Node).Union.fields[3].type = null,
+            unlock: ?@typeInfo(Node).Union.fields[4].type = null,
+            call: ?@typeInfo(Node).Union.fields[5].type = null,
 
-        /// convert from the json node format to the internal format
-        pub fn toNode(self: @This(), alloc: std.mem.Allocator, boolean_vars: *std.StringHashMap(bool)) ?Node {
-            if (self.line) |v| return .{ .line = v };
-            if (self.random_switch) |v| return .{ .random_switch = RandomSwitch.init(v.nexts, v.chances) };
-            if (self.reply) |v| return .{ .reply = Reply.initFromJson(alloc, v, boolean_vars) };
-            if (self.lock) |v| return .{ .lock = v };
-            if (self.unlock) |v| return .{ .unlock = v };
-            if (self.call) |v| return .{ .call = v };
-            return null;
-        }
-
-        // FIXME: add a deep clone utility
-        // FIXME: maybe I should just copy/own the json document?
-        pub fn toNodeAlloc(self: @This(), alloc: std.mem.Allocator) !?Node {
-            if (self.line) |v| return .{ .line = .{
-                .data = .{
-                    .speaker = try alloc.dupe(u8, v.data.speaker),
-                    .text = try alloc.dupe(u8, v.data.text),
-                    .metadata = try alloc.dupe(u8, v.data.metadata),
-                },
-                .next = v.next,
-            } };
-            if (self.random_switch) |v| return .{ .random_switch = RandomSwitch.init(
-                try alloc.dupe(Next, v.nexts),
-                try alloc.dupe(u32, v.chances),
-            ) };
-            if (self.reply) |v| {
-                return .{ .reply = .{
-                    .nexts = alloc.dupe(Next, v.nexts),
-                    .texts = alloc.dupe(Slice(u8), v.texts),
-                } };
+            /// convert from the json node format to the internal format
+            pub fn toNode(self: @This(), alloc: std.mem.Allocator, boolean_vars: *std.StringHashMap(bool)) ?Node {
+                if (self.line) |v| return .{ .line = v };
+                if (self.random_switch) |v| return .{ .random_switch = RandomSwitch.init(v.nexts, v.chances) };
+                if (self.reply) |v| return .{ .reply = Reply.initFromJson(alloc, v, boolean_vars) };
+                if (self.lock) |v| return .{ .lock = v };
+                if (self.unlock) |v| return .{ .unlock = v };
+                if (self.call) |v| return .{ .call = v };
+                return null;
             }
-            if (self.lock) |v| return .{ .lock = v };
-            if (self.unlock) |v| return .{ .unlock = v };
-            if (self.call) |v| return .{ .call = v };
-            return null;
-        }
-    },
+
+            // FIXME: add a deep clone utility
+            // FIXME: maybe I should just copy/own the json document?
+            pub fn toNodeAlloc(self: @This(), alloc: std.mem.Allocator) !?Node {
+                if (self.line) |v| return .{ .line = .{
+                    .data = .{
+                        .speaker = try alloc.dupe(u8, v.data.speaker),
+                        .text = try alloc.dupe(u8, v.data.text),
+                        .metadata = try alloc.dupe(u8, v.data.metadata),
+                    },
+                    .next = v.next,
+                } };
+                if (self.random_switch) |v| return .{ .random_switch = RandomSwitch.init(
+                    try alloc.dupe(Next, v.nexts),
+                    try alloc.dupe(u32, v.chances),
+                ) };
+                if (self.reply) |v| {
+                    return .{ .reply = .{
+                        .nexts = alloc.dupe(Next, v.nexts),
+                        .texts = alloc.dupe(Slice(u8), v.texts),
+                    } };
+                }
+                if (self.lock) |v| return .{ .lock = v };
+                if (self.unlock) |v| return .{ .unlock = v };
+                if (self.call) |v| return .{ .call = v };
+                return null;
+            }
+        },
+    } = &.{},
     functions: []const struct { name: []const u8 } = &.{},
     participants: []const struct { name: []const u8 } = &.{},
     variables: struct {
