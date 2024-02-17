@@ -154,6 +154,7 @@ const VariableType = enum {
 };
 
 const Dialogue = struct {
+    name: []const u8,
     nodes: std.MultiArrayList(Node),
     // FIXME: optimize to fit in usize or even u32
     current_node_index: ?usz,
@@ -294,66 +295,76 @@ pub const DialogueContext = struct {
 
         var max_option_count: usize = 0;
 
-        var dialogues = arena_alloc.alloc(Dialogue, data.dialogues.len) catch |e| {
+        var dialogues = arena_alloc.alloc(Dialogue, data.dialogues.map.count()) catch |e| {
             r = Result(DialogueContext).fmt_err(alloc, "{}", .{e});
             return r;
         };
 
         var string_pool = StringPool{};
 
-        for (data.dialogues, dialogues) |dialogue, *out_dialogue| {
-            var nodes = std.MultiArrayList(Node){};
-            defer if (r.is_err()) nodes.deinit(alloc);
-            nodes.ensureTotalCapacity(alloc, @intCast(dialogue.nodes.len)) catch |e| {
-                r = Result(DialogueContext).fmt_err(alloc, "{}", .{e});
-                return r;
-            };
+        {
+            var dialogue_iter = data.dialogues.map.iterator();
+            var dialogue_index: usize = 0;
+            while (dialogue_iter.next()) |dialogue_entry| : (dialogue_index += 1) {
+                const dialogue_name = alloc.dupe(u8, dialogue_entry.key_ptr.*) catch |e| std.debug.panic("put memory error: {}", .{e});
 
-            var label_to_node_ids = std.StringHashMapUnmanaged(usz){};
-            label_to_node_ids.ensureTotalCapacity(alloc, @intCast(dialogue.nodes.len)) catch |e| {
-                r = Result(DialogueContext).fmt_err(alloc, "{}", .{e});
-                return r;
-            };
+                const dialogue = dialogue_entry.value_ptr.*;
+                var out_dialogue = &dialogues[dialogue_index];
 
-            for (dialogue.nodes, 0..) |json_node, i| {
-                if (json_node.toNode(alloc, &booleans)) |node| {
-                    nodes.append(alloc, node) catch |e| {
-                        r = Result(DialogueContext).fmt_err(alloc, "{}", .{e});
-                        return r;
-                    };
-
-                    switch (node) {
-                        inline .reply, .random_switch => |v| {
-                            for (v.nexts) |maybe_next| {
-                                if (maybe_next.toOptionalInt(usize)) |next| if (next >= dialogue.nodes.len) {
-                                    r = Result(DialogueContext).fmt_err(alloc, "bad next node '{}' on node '{}'", .{ next, i });
-                                    return r;
-                                };
-                            }
-
-                            switch (node) {
-                                .reply => |as_reply| {
-                                    max_option_count = @max(as_reply.texts.len, max_option_count);
-                                },
-                                else => {},
-                            }
-                        },
-                        inline else => |n| if (n.next.toOptionalInt(usize)) |next| if (next >= dialogue.nodes.len) {
-                            r = Result(DialogueContext).fmt_err(alloc, "bad next node '{}' on node '{}'", .{ next, i });
-                            return r;
-                        },
-                    }
-                } else {
-                    r = Result(DialogueContext).fmt_err(alloc, "invalid node (index={}) without type or data", .{i});
+                var nodes = std.MultiArrayList(Node){};
+                defer if (r.is_err()) nodes.deinit(alloc);
+                nodes.ensureTotalCapacity(alloc, @intCast(dialogue.nodes.len)) catch |e| {
+                    r = Result(DialogueContext).fmt_err(alloc, "{}", .{e});
                     return r;
-                }
-            }
+                };
 
-            out_dialogue.* = .{
-                .nodes = nodes,
-                .current_node_index = 0,
-                .label_to_node_ids = label_to_node_ids,
-            };
+                var label_to_node_ids = std.StringHashMapUnmanaged(usz){};
+                label_to_node_ids.ensureTotalCapacity(alloc, @intCast(dialogue.nodes.len)) catch |e| {
+                    r = Result(DialogueContext).fmt_err(alloc, "{}", .{e});
+                    return r;
+                };
+
+                for (dialogue.nodes, 0..) |json_node, i| {
+                    if (json_node.toNode(alloc, &booleans)) |node| {
+                        nodes.append(alloc, node) catch |e| {
+                            r = Result(DialogueContext).fmt_err(alloc, "{}", .{e});
+                            return r;
+                        };
+
+                        switch (node) {
+                            inline .reply, .random_switch => |v| {
+                                for (v.nexts) |maybe_next| {
+                                    if (maybe_next.toOptionalInt(usize)) |next| if (next >= dialogue.nodes.len) {
+                                        r = Result(DialogueContext).fmt_err(alloc, "bad next node '{}' on node '{}'", .{ next, i });
+                                        return r;
+                                    };
+                                }
+
+                                switch (node) {
+                                    .reply => |as_reply| {
+                                        max_option_count = @max(as_reply.texts.len, max_option_count);
+                                    },
+                                    else => {},
+                                }
+                            },
+                            inline else => |n| if (n.next.toOptionalInt(usize)) |next| if (next >= dialogue.nodes.len) {
+                                r = Result(DialogueContext).fmt_err(alloc, "bad next node '{}' on node '{}'", .{ next, i });
+                                return r;
+                            },
+                        }
+                    } else {
+                        r = Result(DialogueContext).fmt_err(alloc, "invalid node (index={}) without type or data", .{i});
+                        return r;
+                    }
+                }
+
+                out_dialogue.* = .{
+                    .name = dialogue_name,
+                    .nodes = nodes,
+                    .current_node_index = 0,
+                    .label_to_node_ids = label_to_node_ids,
+                };
+            }
         }
 
         var step_options_buffer = MutSlice(Line).fromZig(alloc.alloc(Line, max_option_count) catch unreachable);
@@ -434,7 +445,7 @@ pub const DialogueContext = struct {
     // FIXME: isn't this technically next node?
     /// returns -1 if current node index is invalid. 0 is the entry node
     pub fn getCurrentNodeIndex(self: *@This(), dialogue_id: usz) usz {
-        return @intCast(self.dialogues[dialogue_id].current_node_index orelse ~@as(usz, 0b0));
+        return @intCast(self.dialogues[dialogue_id].current_node_index orelse ~@as(usz, 0));
     }
 
     pub fn setCallback(self: *@This(), name: []const u8, callback: Callback) void {
@@ -648,7 +659,7 @@ const ReplyJson = struct {
 
 const DialogueJson = struct {
     version: usize,
-    dialogues: []const struct {
+    dialogues: json.ArrayHashMap(struct {
         name: []const u8,
         nodes: []const struct {
             // FIXME: these must be in sync with the implementation of Node!
@@ -703,7 +714,7 @@ const DialogueJson = struct {
                 return null;
             }
         },
-    } = &.{},
+    }),
     functions: []const struct { name: []const u8 } = &.{},
     participants: []const struct { name: []const u8 } = &.{},
     variables: struct {
