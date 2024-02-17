@@ -153,7 +153,12 @@ test "run small dialogue under c api" {
     const src = try FileBuffer.fromDirAndPath(t.allocator, std.fs.cwd(), "./test/assets/simple1.alternis.json");
     defer src.free(t.allocator);
 
-    var ctx = ade_dialogue_ctx_create_json(src.buffer.ptr, src.buffer.len, 0, false, null);
+    var err: ?[*:0]const u8 = null;
+    var ctx = ade_dialogue_ctx_create_json(src.buffer.ptr, src.buffer.len, 0, false, &err);
+    if (err) |err_str| {
+        std.debug.print("err: {s}", .{err_str});
+    }
+    try t.expect(err != null);
     try t.expect(ctx != null);
     defer ade_dialogue_ctx_destroy(ctx.?);
 

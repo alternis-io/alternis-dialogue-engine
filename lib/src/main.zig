@@ -660,7 +660,6 @@ const ReplyJson = struct {
 const DialogueJson = struct {
     version: usize,
     dialogues: json.ArrayHashMap(struct {
-        name: []const u8,
         nodes: []const struct {
             // FIXME: these must be in sync with the implementation of Node!
             // TODO: generate these from Node type...
