@@ -156,7 +156,7 @@ const VariableType = enum {
 const Dialogue = struct {
     nodes: std.MultiArrayList(Node),
     // FIXME: optimize to fit in usize or even u32
-    current_node_index: ?usize,
+    current_node_index: ?usz,
     label_to_node_ids: std.StringHashMapUnmanaged(usz),
 };
 
@@ -304,13 +304,13 @@ pub const DialogueContext = struct {
         for (data.dialogues, dialogues) |dialogue, *out_dialogue| {
             var nodes = std.MultiArrayList(Node){};
             defer if (r.is_err()) nodes.deinit(alloc);
-            nodes.ensureTotalCapacity(alloc, dialogue.nodes.len) catch |e| {
+            nodes.ensureTotalCapacity(alloc, @intCast(dialogue.nodes.len)) catch |e| {
                 r = Result(DialogueContext).fmt_err(alloc, "{}", .{e});
                 return r;
             };
 
             var label_to_node_ids = std.StringHashMapUnmanaged(usz){};
-            label_to_node_ids.ensureTotalCapacity(alloc, dialogue.nodes.len) catch |e| {
+            label_to_node_ids.ensureTotalCapacity(alloc, @intCast(dialogue.nodes.len)) catch |e| {
                 r = Result(DialogueContext).fmt_err(alloc, "{}", .{e});
                 return r;
             };
@@ -422,19 +422,19 @@ pub const DialogueContext = struct {
             null;
     }
 
-    pub fn getNodeByLabel(self: *@This(), dialogue_id: usize, label: []const u8) ?usz {
+    pub fn getNodeByLabel(self: *@This(), dialogue_id: usz, label: []const u8) ?usz {
         return self.dialogues[dialogue_id].label_to_node_ids.get(label);
     }
 
     /// the entry node of a dialogue is always 0
-    pub fn reset(self: *@This(), dialogue_id: usize, node_index: usize) void {
+    pub fn reset(self: *@This(), dialogue_id: usz, node_index: usz) void {
         self.dialogues[dialogue_id].current_node_index = node_index;
     }
 
     // FIXME: isn't this technically next node?
     /// returns -1 if current node index is invalid. 0 is the entry node
-    pub fn getCurrentNodeIndex(self: *@This(), dialogue_id: usz) i32 {
-        return @intCast(self.dialogues[dialogue_id].current_node_index orelse -1);
+    pub fn getCurrentNodeIndex(self: *@This(), dialogue_id: usz) usz {
+        return @intCast(self.dialogues[dialogue_id].current_node_index orelse ~@as(usz, 0b0));
     }
 
     pub fn setCallback(self: *@This(), name: []const u8, callback: Callback) void {
@@ -506,7 +506,7 @@ pub const DialogueContext = struct {
         std.debug.assert(currNode == .reply);
         {
             @setRuntimeSafety(true);
-            self.dialogues[dialogue_id].current_node_index = currNode.reply.nexts[reply_index].toOptionalInt(usize);
+            self.dialogues[dialogue_id].current_node_index = currNode.reply.nexts[reply_index].toOptionalInt(usz);
         }
     }
 
@@ -526,7 +526,7 @@ pub const DialogueContext = struct {
             switch (current_node) {
                 .line => |v| {
                     // FIXME: technically this seems to mean nextNodeIndex!
-                    dialogue.current_node_index = v.next.toOptionalInt(usize);
+                    dialogue.current_node_index = v.next.toOptionalInt(usz);
                     result = .{ .tag = .line, .data = .{ .line = if (self.do_interpolate)
                         v.data.interpolate(self.arena.allocator(), &self.variables.strings)
                     else
@@ -541,14 +541,14 @@ pub const DialogueContext = struct {
                         acc += chance_count;
                         const chance_proportion = @as(f64, @floatFromInt(acc)) / @as(f64, @floatFromInt(v.total_chances));
                         if (shot < chance_proportion) {
-                            dialogue.current_node_index = next.toOptionalInt(usize);
+                            dialogue.current_node_index = next.toOptionalInt(usz);
                             break;
                         }
                     }
 
                     // just in case of fp error
                     std.debug.assert(v.nexts.len >= 1);
-                    dialogue.current_node_index = v.nexts[v.nexts.len - 1].toOptionalInt(usize);
+                    dialogue.current_node_index = v.nexts[v.nexts.len - 1].toOptionalInt(usz);
                 },
                 .reply => |v| {
                     std.debug.assert(v.texts.len <= self.step_options_buffer.len);
@@ -590,17 +590,17 @@ pub const DialogueContext = struct {
                     self.variables.booleans.put(v.boolean_var_name, false)
                     // FIXME: validate lock variable names at start time
                     catch |e| std.debug.panic("error getting variable '{s}' to lock: {}", .{ v.boolean_var_name, e });
-                    dialogue.current_node_index = v.next.toOptionalInt(usize);
+                    dialogue.current_node_index = v.next.toOptionalInt(usz);
                 },
                 .unlock => |v| {
                     self.variables.booleans.put(v.boolean_var_name, true)
                     // FIXME: validate lock variable names at start time
                     catch |e| std.debug.panic("error getting variable '{s}' to lock: {}", .{ v.boolean_var_name, e });
-                    dialogue.current_node_index = v.next.toOptionalInt(usize);
+                    dialogue.current_node_index = v.next.toOptionalInt(usz);
                 },
                 .call => |v| {
                     if (self.functions.get(v.function_name)) |stored_cb| if (stored_cb) |cb| cb.function(cb.payload);
-                    dialogue.current_node_index = v.next.toOptionalInt(usize);
+                    dialogue.current_node_index = v.next.toOptionalInt(usz);
                     // the user must call 'step' again to get the real step
                     result = .{ .tag = .function_called };
                     return result;
@@ -730,29 +730,29 @@ test "run small dialogue under zig api" {
     try t.expect(ctx_result.is_ok());
 
     var ctx = ctx_result.value;
-    try t.expectEqual(@as(?usize, 0), ctx.current_node_index);
+    try t.expectEqual(@as(?usz, 0), ctx.getCurrentNodeIndex(0));
 
     {
-        const step_result = ctx.step();
+        const step_result = ctx.step(0);
         // FIXME: add pointer-descending eql impl
         try t.expect(step_result.tag == .line);
         try t.expectEqualStrings("test", step_result.data.line.speaker.toZig());
         try t.expectEqualStrings("hello world!", step_result.data.line.text.toZig());
-        try t.expectEqual(@as(?usize, 1), ctx.current_node_index);
+        try t.expectEqual(@as(?usz, 1), ctx.getCurrentNodeIndex(0));
     }
 
     {
-        const step_result = ctx.step();
+        const step_result = ctx.step(0);
         try t.expect(step_result.tag == .line);
         try t.expectEqualStrings("test", step_result.data.line.speaker.toZig());
         try t.expectEqualStrings("goodbye cruel world!", step_result.data.line.text.toZig());
-        try t.expectEqual(@as(?usize, null), ctx.current_node_index);
+        try t.expectEqual(@as(?usz, null), ctx.getCurrentNodeIndex(0));
     }
 
     {
-        const step_result = ctx.step();
+        const step_result = ctx.step(0);
         try t.expect(step_result.tag == .done);
-        try t.expectEqual(@as(?usize, null), ctx.current_node_index);
+        try t.expectEqual(@as(?usz, null), ctx.getCurrentNodeIndex(0));
     }
 }
 
@@ -771,7 +771,7 @@ test "run large dialogue under zig api" {
     try t.expect(ctx_result.is_ok());
 
     var ctx = ctx_result.value;
-    try t.expectEqual(@as(?usize, 0), ctx.current_node_index);
+    try t.expectEqual(@as(?usz, 0), ctx.getCurrentNodeIndex(0));
 
     const SetNameCallback = struct {
         pub fn impl(payload: ?*anyopaque) callconv(.C) void {
@@ -783,38 +783,38 @@ test "run large dialogue under zig api" {
     ctx.setCallback("ask player name", .{ .function = &SetNameCallback.impl, .payload = &ctx });
 
     {
-        const step_result = ctx.step();
+        const step_result = ctx.step(0);
         // FIXME: add pointer-descending eql impl
         try t.expect(step_result.tag == .line);
         try t.expectEqualStrings("Aisha", step_result.data.line.speaker.toZig());
         try t.expectEqualStrings("Hey", step_result.data.line.text.toZig());
-        try t.expectEqual(@as(?usize, 1), ctx.current_node_index);
+        try t.expectEqual(@as(?usz, 1), ctx.getCurrentNodeIndex(0));
     }
 
     {
-        const step_result = ctx.step();
+        const step_result = ctx.step(0);
         try t.expect(step_result.tag == .line);
         try t.expectEqualStrings("Aaron", step_result.data.line.speaker.toZig());
         try t.expectEqualStrings("Yo", step_result.data.line.text.toZig());
-        try t.expectEqual(@as(?usize, 3), ctx.current_node_index);
+        try t.expectEqual(@as(?usz, 3), ctx.getCurrentNodeIndex(0));
     }
 
     {
-        const step_result = ctx.step();
+        const step_result = ctx.step(0);
         try t.expect(step_result.tag == .line);
         try t.expectEqualStrings("Aaron", step_result.data.line.speaker.toZig());
         try t.expectEqualStrings("What's your name?", step_result.data.line.text.toZig());
-        try t.expectEqual(@as(?usize, 4), ctx.current_node_index);
+        try t.expectEqual(@as(?usz, 4), ctx.getCurrentNodeIndex(0));
     }
 
     {
-        const step_result = ctx.step();
+        const step_result = ctx.step(0);
         try t.expect(step_result.tag == .function_called);
-        try t.expectEqual(@as(?usize, 5), ctx.current_node_index);
+        try t.expectEqual(@as(?usz, 5), ctx.getCurrentNodeIndex(0));
     }
 
     {
-        const step_result = ctx.step();
+        const step_result = ctx.step(0);
         try t.expect(step_result.tag == .options);
         try t.expectEqual(@as(usize, 2), step_result.data.options.texts.len);
         try t.expectEqual(@as(usize, 2), step_result.data.options.ids.len);
@@ -822,12 +822,12 @@ test "run large dialogue under zig api" {
         try t.expectEqual(@as(usize, 1), step_result.data.options.ids.toZig()[1]);
         try t.expectEqualStrings("It's Testy McTester and I like waffles", step_result.data.options.texts.ptr[0].text.toZig());
         try t.expectEqualStrings("It's Testy McTester", step_result.data.options.texts.ptr[1].text.toZig());
-        try t.expectEqual(@as(?usize, 5), ctx.current_node_index);
+        try t.expectEqual(@as(?usz, 5), ctx.getCurrentNodeIndex(0));
     }
 
     // if we don't reply, we get the exact same result
     {
-        const step_result = ctx.step();
+        const step_result = ctx.step(0);
         try t.expect(step_result.tag == .options);
         try t.expectEqual(@as(usize, 2), step_result.data.options.texts.len);
         try t.expectEqual(@as(usize, 2), step_result.data.options.ids.len);
@@ -836,22 +836,22 @@ test "run large dialogue under zig api" {
         try t.expectEqual(@as(usize, 1), step_result.data.options.ids.toZig()[1]);
         try t.expectEqualStrings("It's Testy McTester and I like waffles", step_result.data.options.texts.ptr[0].text.toZig());
         try t.expectEqualStrings("It's Testy McTester", step_result.data.options.texts.ptr[1].text.toZig());
-        try t.expectEqual(@as(?usize, 5), ctx.current_node_index);
+        try t.expectEqual(@as(?usz, 5), ctx.getCurrentNodeIndex(0));
     }
 
-    ctx.reply(1);
-    try t.expectEqual(@as(?usize, 8), ctx.current_node_index);
+    ctx.reply(0, 1);
+    try t.expectEqual(@as(?usz, 8), ctx.getCurrentNodeIndex(0));
 
     {
-        const step_result = ctx.step();
+        const step_result = ctx.step(0);
         try t.expect(step_result.tag == .line);
         try t.expectEqualStrings("Aaron", step_result.data.line.speaker.toZig());
         try t.expectEqualStrings("Ok. What was your name again?", step_result.data.line.text.toZig());
-        try t.expectEqual(@as(?usize, 5), ctx.current_node_index);
+        try t.expectEqual(@as(?usz, 5), ctx.getCurrentNodeIndex(0));
     }
 
     {
-        const step_result = ctx.step();
+        const step_result = ctx.step(0);
         try t.expect(step_result.tag == .options);
         try t.expectEqual(@as(usize, 2), step_result.data.options.texts.len);
         try t.expectEqual(@as(usize, 2), step_result.data.options.ids.len);
@@ -860,23 +860,23 @@ test "run large dialogue under zig api" {
         try t.expectEqual(@as(usize, 1), step_result.data.options.ids.toZig()[1]);
         try t.expectEqualStrings("It's Testy McTester and I like waffles", step_result.data.options.texts.ptr[0].text.toZig());
         try t.expectEqualStrings("It's Testy McTester", step_result.data.options.texts.ptr[1].text.toZig());
-        try t.expectEqual(@as(?usize, 5), ctx.current_node_index);
+        try t.expectEqual(@as(?usz, 5), ctx.getCurrentNodeIndex(0));
     }
 
-    ctx.reply(0);
-    try t.expectEqual(@as(?usize, 6), ctx.current_node_index);
+    ctx.reply(0, 0);
+    try t.expectEqual(@as(?usz, 6), ctx.getCurrentNodeIndex(0));
 
     {
-        const step_result = ctx.step();
+        const step_result = ctx.step(0);
         try t.expect(step_result.tag == .line);
         try t.expectEqualStrings("Aaron", step_result.data.line.speaker.toZig());
         try t.expectEqualStrings("You're pretty cool!\nWhat was your name again?", step_result.data.line.text.toZig());
-        try t.expectEqual(@as(?usize, 5), ctx.current_node_index);
+        try t.expectEqual(@as(?usz, 5), ctx.getCurrentNodeIndex(0));
     }
 
     // now all options should be available
     {
-        const step_result = ctx.step();
+        const step_result = ctx.step(0);
         try t.expect(step_result.tag == .options);
         try t.expectEqual(@as(usize, 3), step_result.data.options.texts.len);
         try t.expectEqual(@as(usize, 3), step_result.data.options.ids.len);
@@ -886,23 +886,23 @@ test "run large dialogue under zig api" {
         try t.expectEqualStrings("It's Testy McTester and I like waffles", step_result.data.options.texts.ptr[0].text.toZig());
         try t.expectEqualStrings("It's Testy McTester", step_result.data.options.texts.ptr[1].text.toZig());
         try t.expectEqualStrings("Wanna go eat waffles?", step_result.data.options.texts.ptr[2].text.toZig());
-        try t.expectEqual(@as(?usize, 5), ctx.current_node_index);
+        try t.expectEqual(@as(?usz, 5), ctx.getCurrentNodeIndex(0));
     }
 
-    ctx.reply(2);
-    try t.expectEqual(@as(?usize, 9), ctx.current_node_index);
+    ctx.reply(0, 2);
+    try t.expectEqual(@as(?usz, 9), ctx.getCurrentNodeIndex(0));
 
     {
-        const step_result = ctx.step();
+        const step_result = ctx.step(0);
         try t.expect(step_result.tag == .line);
         try t.expectEqualStrings("Aaron", step_result.data.line.speaker.toZig());
         try t.expectEqualStrings("Yeah, Testy McTester.", step_result.data.line.text.toZig());
-        try t.expectEqual(@as(?usize, null), ctx.current_node_index);
+        try t.expectEqual(@as(?usz, null), ctx.getCurrentNodeIndex(0));
     }
 
     {
-        const step_result = ctx.step();
+        const step_result = ctx.step(0);
         try t.expect(step_result.tag == .done);
-        try t.expectEqual(@as(?usize, null), ctx.current_node_index);
+        try t.expectEqual(@as(?usz, null), ctx.getCurrentNodeIndex(0));
     }
 }

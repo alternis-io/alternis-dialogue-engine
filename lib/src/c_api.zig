@@ -60,17 +60,17 @@ export fn ade_dialogue_ctx_destroy(in_dialogue_ctx: ?*Api.DialogueContext) void 
     alloc.destroy(ctx);
 }
 
-export fn ade_dialogue_ctx_reset(in_dialogue_ctx: ?*Api.DialogueContext, dialogue_id: usize, node_index: usize) void {
+export fn ade_dialogue_ctx_reset(in_dialogue_ctx: ?*Api.DialogueContext, dialogue_id: usz, node_index: usz) void {
     const ctx = in_dialogue_ctx orelse return;
     ctx.reset(node_index, dialogue_id);
 }
 
-export fn ade_dialogue_ctx_reply(in_dialogue_ctx: ?*Api.DialogueContext, dialogue_id: usize, reply_id: usize) void {
+export fn ade_dialogue_ctx_reply(in_dialogue_ctx: ?*Api.DialogueContext, dialogue_id: usz, reply_id: usize) void {
     const ctx = in_dialogue_ctx orelse return;
-    ctx.reply(reply_id, dialogue_id);
+    ctx.reply(dialogue_id, reply_id);
 }
 
-export fn ade_dialogue_ctx_get_node_by_label(in_dialogue_ctx: ?*Api.DialogueContext, dialogue_id: usize, label_ptr: [*]const u8, label_len: usize) usize {
+export fn ade_dialogue_ctx_get_node_by_label(in_dialogue_ctx: ?*Api.DialogueContext, dialogue_id: usz, label_ptr: [*]const u8, label_len: usize) usz {
     const ctx = in_dialogue_ctx orelse unreachable;
     return ctx.getNodeByLabel(dialogue_id, label_ptr[0..label_len]) orelse unreachable; // FIXME: return -1?
 }
@@ -158,19 +158,19 @@ test "run small dialogue under c api" {
     defer ade_dialogue_ctx_destroy(ctx.?);
 
     var step_result: Api.DialogueContext.StepResult = undefined;
-    ade_dialogue_ctx_step(ctx.?, &step_result);
+    ade_dialogue_ctx_step(ctx.?, 0, &step_result);
     try t.expect(step_result.tag == .line);
     try t.expectEqualStrings("test", step_result.data.line.speaker.toZig());
     try t.expectEqualStrings("hello world!", step_result.data.line.text.toZig());
-    try t.expectEqual(@as(?usize, 1), ctx.?.current_node_index);
+    try t.expectEqual(@as(?usz, 1), ctx.?.getCurrentNodeIndex(0));
 
-    ade_dialogue_ctx_step(ctx.?, &step_result);
+    ade_dialogue_ctx_step(ctx.?, 0, &step_result);
     try t.expect(step_result.tag == .line);
     try t.expectEqualStrings("test", step_result.data.line.speaker.toZig());
     try t.expectEqualStrings("goodbye cruel world!", step_result.data.line.text.toZig());
-    try t.expectEqual(@as(?usize, null), ctx.?.current_node_index);
+    try t.expectEqual(@as(?usz, null), ctx.?.getCurrentNodeIndex(0));
 
-    ade_dialogue_ctx_step(ctx.?, &step_result);
+    ade_dialogue_ctx_step(ctx.?, 0, &step_result);
     try t.expect(step_result.tag == .done);
-    try t.expectEqual(@as(?usize, null), ctx.?.current_node_index);
+    try t.expectEqual(@as(?usz, null), ctx.?.getCurrentNodeIndex(0));
 }
