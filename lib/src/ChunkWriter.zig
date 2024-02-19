@@ -62,7 +62,8 @@ pub fn ChunkWriter(comptime chunk_size: usize) type {
                 }
                 const next_end = @min(self.writable_chunk.len, remaining_bytes.len);
                 const bytes_for_current_page = remaining_bytes[0..next_end];
-                @memcpy(self.writable_chunk, bytes_for_current_page);
+                const written_slice = self.writable_chunk[0..next_end];
+                @memcpy(written_slice, bytes_for_current_page);
                 self.writable_chunk = self.writable_chunk[bytes_for_current_page.len..self.writable_chunk.len];
                 remaining_bytes = remaining_bytes[bytes_for_current_page.len..];
             }
