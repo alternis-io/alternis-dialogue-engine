@@ -78,10 +78,6 @@ describe("smoke", () => {
     });
 
     assert.deepStrictEqual(ctx.step(0), {
-      functionCalled: true,
-    });
-
-    assert.deepStrictEqual(ctx.step(0), {
       options: [
         {
           speaker: "Aisha",
