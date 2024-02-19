@@ -158,7 +158,7 @@ test "run small dialogue under c api" {
     if (err) |err_str| {
         std.debug.print("err: {s}", .{err_str});
     }
-    try t.expect(err != null);
+    try t.expectEqual(err, null);
     try t.expect(ctx != null);
     defer ade_dialogue_ctx_destroy(ctx.?);
 
