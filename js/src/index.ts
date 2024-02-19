@@ -278,12 +278,15 @@ export async function makeDialogueContext(json: string, opts: MakeDialogueContex
 
       const MAX_ITERS = globalThis?.__alternis?.MAX_STEP_ITERS ?? 500_000;
       if (MAX_ITERS <= 0) throw Error(`invalid globalThis.__alternis.MAX_STEP_ITERS of '${MAX_ITERS}'`);
+      console.log(MAX_ITERS);
 
       for (let i = 0; i < MAX_ITERS; ++i) {
         nativeLib._instance.exports.ade_dialogue_ctx_step(nativeDlgCtx, dialogue_id, stepResultPtr);
         stepResult = DialogueContext.StepResult.unmarshal(nativeLib, getStepResultView());
-        if (!("functionCalled" in stepResult))
-          break;
+        console.log(i, stepResult);
+        if ("functionCalled" in stepResult)
+          continue;
+        break;
       }
 
       return stepResult!;

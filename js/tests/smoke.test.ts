@@ -14,7 +14,7 @@ describe("smoke", () => {
   it("create and run small context to completion", async () => {
     const ctx = await Api.makeDialogueContext(smallTestJson);
 
-    const step_result_1 = ctx.step();
+    const step_result_1 = ctx.step(0);
     assert.deepStrictEqual(step_result_1, {
       line:  {
         speaker: "test",
@@ -23,7 +23,7 @@ describe("smoke", () => {
       },
     });
 
-    const step_result_2 = ctx.step();
+    const step_result_2 = ctx.step(0);
     assert.deepStrictEqual(step_result_2, {
       line:  {
         speaker: "test",
@@ -32,7 +32,7 @@ describe("smoke", () => {
       },
     });
 
-    const step_result_3 = ctx.step();
+    const step_result_3 = ctx.step(0);
     assert.deepStrictEqual(step_result_3, {
       done: true,
     });
@@ -53,7 +53,7 @@ describe("smoke", () => {
       ctx.setVariableString("name", "Testy McTester");
     });
 
-    assert.deepStrictEqual(ctx.step(), {
+    assert.deepStrictEqual(ctx.step(0), {
       line:  {
         speaker: "Aisha",
         text: "Hey",
@@ -61,7 +61,7 @@ describe("smoke", () => {
       },
     });
 
-    assert.deepStrictEqual(ctx.step(), {
+    assert.deepStrictEqual(ctx.step(0), {
       line:  {
         speaker: "Aaron",
         text: "Yo",
@@ -69,7 +69,7 @@ describe("smoke", () => {
       },
     });
 
-    assert.deepStrictEqual(ctx.step(), {
+    assert.deepStrictEqual(ctx.step(0), {
       line:  {
         speaker: "Aaron",
         text: "What's your name?",
@@ -77,11 +77,11 @@ describe("smoke", () => {
       },
     });
 
-    assert.deepStrictEqual(ctx.step(), {
+    assert.deepStrictEqual(ctx.step(0), {
       functionCalled: true,
     });
 
-    assert.deepStrictEqual(ctx.step(), {
+    assert.deepStrictEqual(ctx.step(0), {
       options: [
         {
           speaker: "Aisha",
@@ -99,7 +99,7 @@ describe("smoke", () => {
     });
 
     // if we don't reply, we get the same node
-    assert.deepStrictEqual(ctx.step(), {
+    assert.deepStrictEqual(ctx.step(0), {
       options: [
         {
           speaker: "Aisha",
@@ -116,9 +116,9 @@ describe("smoke", () => {
       ],
     });
 
-    ctx.reply(1);
+    ctx.reply(0, 1);
 
-    assert.deepStrictEqual(ctx.step(), {
+    assert.deepStrictEqual(ctx.step(0), {
       line:  {
         speaker: "Aaron",
         text: "Ok. What was your name again?",
@@ -126,7 +126,7 @@ describe("smoke", () => {
       },
     });
 
-    assert.deepStrictEqual(ctx.step(), {
+    assert.deepStrictEqual(ctx.step(0), {
       options: [
         {
           speaker: "Aisha",
@@ -143,9 +143,9 @@ describe("smoke", () => {
       ],
     });
 
-    ctx.reply(0);
+    ctx.reply(0, 0);
 
-    assert.deepStrictEqual(ctx.step(), {
+    assert.deepStrictEqual(ctx.step(0), {
       line:  {
         speaker: "Aaron",
         text: "You're pretty cool!\nWhat was your name again?",
@@ -153,7 +153,7 @@ describe("smoke", () => {
       },
     });
 
-    assert.deepStrictEqual(ctx.step(), {
+    assert.deepStrictEqual(ctx.step(0), {
       options: [
         {
           speaker: "Aisha",
@@ -176,9 +176,9 @@ describe("smoke", () => {
       ],
     });
 
-    ctx.reply(2);
+    ctx.reply(0, 2);
 
-    assert.deepStrictEqual(ctx.step(), {
+    assert.deepStrictEqual(ctx.step(0), {
       line:  {
         speaker: "Aaron",
         text: "Yeah, Testy McTester.",
@@ -186,7 +186,7 @@ describe("smoke", () => {
       },
     });
 
-    assert.deepStrictEqual(ctx.step(), {
+    assert.deepStrictEqual(ctx.step(0), {
       done: true,
     });
 
@@ -196,7 +196,7 @@ describe("smoke", () => {
   it("create and run worker context to completion", async () => {
     const ctx = await WorkerApi.makeDialogueContext(smallTestJson);
 
-    const step_result_1 = await ctx.step();
+    const step_result_1 = await ctx.step(0);
     assert.deepStrictEqual(step_result_1, {
       line:  {
         speaker: "test",
@@ -205,7 +205,7 @@ describe("smoke", () => {
       },
     });
 
-    const step_result_2 = await ctx.step();
+    const step_result_2 = await ctx.step(0);
     assert.deepStrictEqual(step_result_2, {
       line:  {
         speaker: "test",
@@ -214,11 +214,11 @@ describe("smoke", () => {
       },
     });
 
-    const step_result_3 = await ctx.step();
+    const step_result_3 = await ctx.step(0);
     assert.deepStrictEqual(step_result_3, {
       done: true,
     });
 
-    await ctx.dispose();
+    ctx.dispose();
   });
 });
