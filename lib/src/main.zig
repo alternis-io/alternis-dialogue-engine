@@ -166,6 +166,7 @@ const Dialogue = struct {
     label_to_node_ids: std.StringHashMapUnmanaged(usz),
 
     pub fn deinit(self: *@This(), alloc: std.mem.Allocator) void {
+        alloc.free(self.name);
         self.nodes.deinit(alloc);
         self.label_to_node_ids.deinit(alloc);
     }
@@ -316,7 +317,6 @@ pub const DialogueContext = struct {
             var dialogue_iter = data.dialogues.map.iterator();
             var dialogue_index: usize = 0;
             while (dialogue_iter.next()) |dialogue_entry| : (dialogue_index += 1) {
-                // FIXME: leak
                 const dialogue_name = alloc.dupe(u8, dialogue_entry.key_ptr.*) catch |e| std.debug.panic("put memory error: {}", .{e});
 
                 const json_dialogue = dialogue_entry.value_ptr.*;
@@ -430,7 +430,7 @@ pub const DialogueContext = struct {
             }
 
             // no need to free self.step_result_buffer, it uses the arena
-            dialogue.nodes.deinit(alloc);
+            dialogue.deinit(alloc);
         }
         alloc.free(self.step_options_buffer.toZig());
         alloc.free(self.step_option_ids_buffer.toZig());
