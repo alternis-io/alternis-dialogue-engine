@@ -68,10 +68,12 @@
 
       const step_result_3 = await ctx.step();
       assertDeepEqual(step_result_3, {
-        none: true,
+        done: true,
       }, "step_result_3");
 
       ctx.dispose();
+
+      alert("Success!");
     </script>
   </body>
 </html>

@@ -1,5 +1,5 @@
 import type * as InContextApi from ".";
-import MyWorker from "./worker.ts?worker";
+import MyWorker from "./worker?worker";
 
 // FIXME: use a dependency?
 interface UnifiedWorker<Msg = any> {
@@ -34,7 +34,8 @@ async function getWorker() {
       // output
       (globalThis as any).self = { location: import.meta.url };
       const WorkerClass = await import("node:worker_threads").then(p => p.Worker)
-      const _worker = new WorkerClass(await import("./worker.ts?url"), {
+      const workerModule = await import("./worker?url");
+      const _worker = new WorkerClass(workerModule.default, {
         name: "AlternisWasmWorker",
       });
       delete (globalThis as any).self;

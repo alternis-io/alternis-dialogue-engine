@@ -29,7 +29,7 @@
     "build-dev": "vite build --mode development",
     "build": "vite build --mode production",
     "typecheck": "tsc -p . --noEmit",
-    "test": "cross-env TS_NODE_PROJECT=./tests/tsconfig.json mocha --config mocharc.json 'tests/**/*.test.ts'"
+    "test": "cross-env TS_NODE_PROJECT=./tests/tsconfig.json NODE_OPTIONS=--experimental-import-meta-resolve mocha --config mocharc.json 'tests/**/*.test.ts'"
   },
   "keywords": [
     "alternis",
