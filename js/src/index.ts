@@ -141,15 +141,21 @@ export namespace DialogueContext {
       throw Error("unreachable; unknown tag while unmarshalling StepResult")
     }
 
-    // FIXME: assumes Line is the largest union member
-    export const byteSize = 4 + Line.byteSize;
+    // NOTE: union types list be synced manually
+    export const byteSize = 4 + Math.max(Line.byteSize, Slice(Line).byteSize);
   }
 }
 
 export interface DialogueContext {
-  step(): DialogueContext.StepResult;
-  reset(): void;
-  reply(replyId: number): void;
+  // FIXME: reference dialogues by name
+  step(dialogue_id: number): DialogueContext.StepResult;
+  /** reset to the given node_id. 0 always refers to the first node */
+  reset(dialogue_id: number, node_id?: number): void;
+  reply(dialogue_id: number, replyId: number): void;
+  /** returns the numeric id of the node for a given label,
+   * which can be used to reset to that node programmatically
+   */
+  getNodeByLabel(dialogue_id: number, name: string): number;
 
   // TODO: support promises
   setCallback(name: string, fn: (() => void)): void;
@@ -170,9 +176,11 @@ interface NativeModuleExports {
   ): number;
 
   ade_dialogue_ctx_destroy(dialogue_ctx: number): void;
-  ade_dialogue_ctx_step(dialogue_ctx: number, result_slot: number): void;
-  ade_dialogue_ctx_reset(dialogue_ctx: number): void;
-  ade_dialogue_ctx_reply(dialogue_ctx: number, reply_id: number): void;
+
+  ade_dialogue_ctx_step(dialogue_ctx: number, dialogue_id: number, result_slot: number): void;
+  ade_dialogue_ctx_reset(dialogue_ctx: number, dialogue_id: number, node_index: number): void;
+  ade_dialogue_ctx_reply(dialogue_ctx: number, dialogue_id: number, reply_id: number): void;
+  ade_dialogue_ctx_get_node_by_label(dialogue_ctx: number, dialogue_id: number, label_ptr: number, label_len: number): number;
 
   ade_dialogue_ctx_set_variable_boolean(
     in_dialogue_ctx: number,
@@ -229,6 +237,12 @@ interface MakeDialogueContextOpts {
   noInterpolate?: boolean;
 }
 
+declare global {
+  var __alternis: undefined | {
+    MAX_STEP_ITERS?: number;
+  };
+}
+
 /**
  * @param {string} json - a valid json string in the AlternisDialogueV1 format
  */
@@ -259,19 +273,38 @@ export async function makeDialogueContext(json: string, opts: MakeDialogueContex
   const stringTable = new Map<string, WasmStr>();
 
   const result: DialogueContext = {
-    step() {
+    step(dialogue_id) {
       let stepResult: DialogueContext.StepResult;
-      do {
-        nativeLib._instance.exports.ade_dialogue_ctx_step(nativeDlgCtx, stepResultPtr);
+
+      const MAX_ITERS = globalThis?.__alternis?.MAX_STEP_ITERS ?? 500_000;
+      if (MAX_ITERS <= 0) throw Error(`invalid globalThis.__alternis.MAX_STEP_ITERS of '${MAX_ITERS}'`);
+
+      for (let i = 0; i < MAX_ITERS; ++i) {
+        nativeLib._instance.exports.ade_dialogue_ctx_step(nativeDlgCtx, dialogue_id, stepResultPtr);
         stepResult = DialogueContext.StepResult.unmarshal(nativeLib, getStepResultView());
-      } while ("functionCalled" in stepResult);
-      return stepResult;
+        if (!("functionCalled" in stepResult))
+          break;
+      }
+
+      return stepResult!;
     },
-    reset() {
-      nativeLib._instance.exports.ade_dialogue_ctx_reset(nativeDlgCtx);
+
+    reset(dialogue_id, node_id = 0) {
+      // FIXME: test for handling invalid ids
+      nativeLib._instance.exports.ade_dialogue_ctx_reset(nativeDlgCtx, dialogue_id, node_id);
     },
-    reply(replyId: number) {
-      nativeLib._instance.exports.ade_dialogue_ctx_reply(nativeDlgCtx, replyId);
+
+    reply(dialogue_id, replyId) {
+      nativeLib._instance.exports.ade_dialogue_ctx_reply(nativeDlgCtx, dialogue_id, replyId);
+    },
+
+    getNodeByLabel(dialogue_id, name) {
+      let wasmName = stringTable.get(name);
+      if (wasmName === undefined) {
+        wasmName = nativeLib.marshalString(name);
+        stringTable.set(name, wasmName);
+      }
+      return nativeLib._instance.exports.ade_dialogue_ctx_get_node_by_label(nativeDlgCtx, dialogue_id, wasmName.ptr, wasmName.len);
     },
 
     setCallback(name, cb) {

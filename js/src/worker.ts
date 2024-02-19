@@ -24,17 +24,22 @@ onmessagePromise.then(onmessage => onmessage(async (msg: any) => {
     } else if (msg.type === "DialogueContext.step") {
       const ctx = ptrMap.get(msg.ptr);
       if (!ctx) throw Error("no such pointer");
-      postMessage({ id, result: ctx.step() });
+      postMessage({ id, result: ctx.step(...msg.args as [number]) });
 
     } else if (msg.type === "DialogueContext.reset") {
       const ctx = ptrMap.get(msg.ptr);
       if (!ctx) throw Error("no such pointer");
-      postMessage({ id, result: ctx.reset() });
+      postMessage({ id, result: ctx.reset(...msg.args as [number, number]) });
 
     } else if (msg.type === "DialogueContext.reply") {
       const ctx = ptrMap.get(msg.ptr);
       if (!ctx) throw Error("no such pointer");
-      postMessage({ id, result: ctx.reply(...msg.args as [any]) });
+      postMessage({ id, result: ctx.reply(...msg.args as [number, number]) });
+
+    } else if (msg.type === "DialogueContext.getNodeByLabel") {
+      const ctx = ptrMap.get(msg.ptr);
+      if (!ctx) throw Error("no such pointer");
+      postMessage({ id, result: ctx.getNodeByLabel(...msg.args as [number, string]) });
 
     } else if (msg.type === "DialogueContext.dispose") {
       const ctx = ptrMap.get(msg.ptr);

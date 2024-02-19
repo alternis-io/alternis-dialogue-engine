@@ -52,9 +52,10 @@ async function getWorker() {
 
 
 export interface WorkerDialogueContext {
-  step(): Promise<InContextApi.DialogueContext.StepResult>;
-  reset(): Promise<void>;
-  reply(replyId: number): Promise<void>;
+  step(dialogue_id: number): Promise<InContextApi.DialogueContext.StepResult>;
+  reset(dialogue_id: number, node_id: number): Promise<void>;
+  reply(dialogue_id: number, replyId: number): Promise<void>;
+  getNodeByLabel(dialogue_id: number, label: string): Promise<number>;
   // TODO: add support for Symbol.dispose
   dispose(): void;
 }
@@ -84,14 +85,17 @@ export async function makeDialogueContext(
   const result = await asyncPostMessageWithId({ type: "makeDialogueContext", args });
 
   return {
-    async step() {
-      return await asyncPostMessageWithId({ type: "DialogueContext.step", ptr: result.ptr });
+    async step(dialogue_id) {
+      return await asyncPostMessageWithId({ type: "DialogueContext.step", ptr: result.ptr, args: [dialogue_id] });
     },
-    async reset() {
-      return asyncPostMessageWithId({ type: "DialogueContext.reset", ptr: result.ptr });
+    async reset(dialogue_id, node_id = 0) {
+      return asyncPostMessageWithId({ type: "DialogueContext.reset", ptr: result.ptr, args: [dialogue_id, node_id] });
     },
-    async reply(replyId) {
-      return asyncPostMessageWithId({ type: "DialogueContext.reply", ptr: result.ptr, args: [replyId] });
+    async reply(dialogue_id, replyId) {
+      return asyncPostMessageWithId({ type: "DialogueContext.reply", ptr: result.ptr, args: [dialogue_id, replyId] });
+    },
+    async getNodeByLabel(dialogue_id, label) {
+      return asyncPostMessageWithId({ type: "DialogueContext.getNodeByLabel", ptr: result.ptr, args: [dialogue_id, label] });
     },
     async dispose() {
       return asyncPostMessageWithId({ type: "DialogueContext.dispose", ptr: result.ptr });
