@@ -300,7 +300,7 @@ pub const DialogueContext = struct {
             return r;
         };
 
-        var string_pool = StringPool{};
+        const string_pool = StringPool{};
 
         {
             var dialogue_iter = data.dialogues.map.iterator();
@@ -309,7 +309,7 @@ pub const DialogueContext = struct {
                 const dialogue_name = alloc.dupe(u8, dialogue_entry.key_ptr.*) catch |e| std.debug.panic("put memory error: {}", .{e});
 
                 const dialogue = dialogue_entry.value_ptr.*;
-                var out_dialogue = &dialogues[dialogue_index];
+                const out_dialogue = &dialogues[dialogue_index];
 
                 var nodes = std.MultiArrayList(Node){};
                 defer if (r.is_err()) nodes.deinit(alloc);
@@ -367,8 +367,8 @@ pub const DialogueContext = struct {
             }
         }
 
-        var step_options_buffer = MutSlice(Line).fromZig(alloc.alloc(Line, max_option_count) catch unreachable);
-        var step_option_ids_buffer = MutSlice(usize).fromZig(alloc.alloc(usize, max_option_count) catch unreachable);
+        const step_options_buffer = MutSlice(Line).fromZig(alloc.alloc(Line, max_option_count) catch unreachable);
+        const step_option_ids_buffer = MutSlice(usize).fromZig(alloc.alloc(usize, max_option_count) catch unreachable);
 
         const seed = opts.random_seed orelse _: {
             if (builtin.os.tag == .freestanding) {
@@ -408,7 +408,7 @@ pub const DialogueContext = struct {
                 const nodes_slice = dialogue.nodes.slice();
                 for (nodes_slice.items(.tags), 0..) |tag, index| {
                     if (tag != .reply) continue;
-                    var value = nodes_slice.get(index);
+                    const value = nodes_slice.get(index);
                     alloc.free(value.reply.conditions);
                 }
             }
@@ -469,7 +469,7 @@ pub const DialogueContext = struct {
         var iter = self.functions.iterator();
         while (iter.next()) |entry| {
             // freed by arena
-            var payload = self.arena.allocator().create(SetAllCallbacksPayload) catch |e| std.debug.panic("alloc error: {}", .{e});
+            const payload = self.arena.allocator().create(SetAllCallbacksPayload) catch |e| std.debug.panic("alloc error: {}", .{e});
 
             payload.* = SetAllCallbacksPayload{
                 .name = Slice(u8).fromZig(entry.key_ptr.*),

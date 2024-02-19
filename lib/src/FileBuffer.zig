@@ -38,7 +38,8 @@ pub fn fromFile(alloc: std.mem.Allocator, file: std.fs.File) !Self {
         },
         // assuming posix currently
         else => {
-            var src_ptr = try std.os.mmap(null, file_len, std.os.PROT.READ, std.os.MAP.SHARED, file.handle, 0);
+            //const src_ptr = try std.os.mmap(null, file_len, std.os.PROT.READ, std.os.MAP.TYPE.SHARED, file.handle, 0);
+            const src_ptr = try std.os.mmap(null, file_len, std.os.PROT.READ, .{ .TYPE = .SHARED }, file.handle, 0);
             const buffer = @as([*]const u8, @ptrCast(src_ptr))[0..file_len];
             return Self{ .buffer = buffer };
         },

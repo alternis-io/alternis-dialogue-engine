@@ -1,6 +1,5 @@
 const std = @import("std");
 
-
 /// A writer that writes to the last chunk in a list of chunks,
 /// appending a new chunk to the list every time the end is reached.
 /// can be used to efficiently write data of unknown length and then you
@@ -30,7 +29,7 @@ pub fn ChunkWriter(comptime chunk_size: usize) type {
             while (chunks_iter.next()) |page| {
                 const is_last = index == self.chunks.count() - 1;
                 const copy_size = if (is_last) last_page_written_num else chunk_size;
-                std.mem.copy(u8, buff[cursor .. cursor + copy_size], page[0..copy_size]);
+                @memcpy(buff[cursor .. cursor + copy_size], page[0..copy_size]);
                 index += 1;
                 cursor += copy_size;
             }
@@ -40,7 +39,7 @@ pub fn ChunkWriter(comptime chunk_size: usize) type {
 
         pub fn init(alloc: std.mem.Allocator) !Self {
             var chunks = std.SegmentedList(Chunk, 0){};
-            var first_page = try chunks.addOne(alloc);
+            const first_page = try chunks.addOne(alloc);
             return Self{
                 .alloc = alloc,
                 .chunks = chunks,
@@ -63,7 +62,7 @@ pub fn ChunkWriter(comptime chunk_size: usize) type {
                 }
                 const next_end = @min(self.writable_chunk.len, remaining_bytes.len);
                 const bytes_for_current_page = remaining_bytes[0..next_end];
-                std.mem.copy(u8, self.writable_chunk, bytes_for_current_page);
+                @memcpy(self.writable_chunk, bytes_for_current_page);
                 self.writable_chunk = self.writable_chunk[bytes_for_current_page.len..self.writable_chunk.len];
                 remaining_bytes = remaining_bytes[bytes_for_current_page.len..];
             }

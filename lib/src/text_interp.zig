@@ -6,11 +6,7 @@ const ChunkWriter = @import("./ChunkWriter.zig").ChunkWriter;
 // dialogues are unlikely to have very long text
 const SmallChunkWriter = ChunkWriter(512);
 
-pub fn interpolate_template(
-    template: []const u8,
-    alloc: std.mem.Allocator,
-    vars: *std.StringHashMap([]const u8)
-) ![]u8 {
+pub fn interpolate_template(template: []const u8, alloc: std.mem.Allocator, vars: *std.StringHashMap([]const u8)) ![]u8 {
     // FIXME: would be nicer if the writer were an argument
     var chunk_writer = try SmallChunkWriter.init(alloc);
     defer chunk_writer.deinit();
@@ -39,8 +35,12 @@ pub fn interpolate_template(
                 .in_var => {},
             },
             '\\' => switch (state) {
-                .in_text, .in_escape_text => { state = .in_escape_text; },
-                .in_var, .in_escape_var => { state = .in_escape_var; },
+                .in_text, .in_escape_text => {
+                    state = .in_escape_text;
+                },
+                .in_var, .in_escape_var => {
+                    state = .in_escape_var;
+                },
             },
             '}' => switch (state) {
                 .in_text => {},
@@ -76,15 +76,10 @@ test "correctly interpolate many" {
     try vars.put("end", " goodbye");
     defer vars.deinit();
 
-    var actual = try interpolate_template(
-        "{begin}, {middle}{next_to} \\{...and{end}}. the end",
-        std.testing.allocator,
-        &vars
-    );
+    const actual = try interpolate_template("{begin}, {middle}{next_to} \\{...and{end}}. the end", std.testing.allocator, &vars);
 
     defer std.testing.allocator.free(actual);
 
     // FIXME: note that escape handling is broken, it's not hard to fix but I'm lazy and have too much to do
     try std.testing.expectEqualStrings("hello, how do you do? \\{...and goodbye}. the end", actual);
 }
-
