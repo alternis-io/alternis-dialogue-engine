@@ -159,6 +159,11 @@ const Dialogue = struct {
     // FIXME: optimize to fit in usize or even u32
     current_node_index: ?usz,
     label_to_node_ids: std.StringHashMapUnmanaged(usz),
+
+    pub fn deinit(self: *@This(), alloc: std.mem.Allocator) void {
+        self.nodes.deinit(alloc);
+        self.label_to_node_ids.deinit(alloc);
+    }
 };
 
 pub const DialogueContext = struct {
@@ -306,35 +311,36 @@ pub const DialogueContext = struct {
             var dialogue_iter = data.dialogues.map.iterator();
             var dialogue_index: usize = 0;
             while (dialogue_iter.next()) |dialogue_entry| : (dialogue_index += 1) {
+                // FIXME: leak
                 const dialogue_name = alloc.dupe(u8, dialogue_entry.key_ptr.*) catch |e| std.debug.panic("put memory error: {}", .{e});
 
-                const dialogue = dialogue_entry.value_ptr.*;
+                const json_dialogue = dialogue_entry.value_ptr.*;
                 const out_dialogue = &dialogues[dialogue_index];
 
                 var nodes = std.MultiArrayList(Node){};
-                defer if (r.is_err()) nodes.deinit(alloc);
-                nodes.ensureTotalCapacity(alloc, @intCast(dialogue.nodes.len)) catch |e| {
+                nodes.ensureTotalCapacity(alloc, @intCast(json_dialogue.nodes.len)) catch |e| {
                     r = Result(DialogueContext).fmt_err(alloc, "{}", .{e});
                     return r;
                 };
 
                 var label_to_node_ids = std.StringHashMapUnmanaged(usz){};
-                label_to_node_ids.ensureTotalCapacity(alloc, @intCast(dialogue.nodes.len)) catch |e| {
+                label_to_node_ids.ensureTotalCapacity(alloc, @intCast(json_dialogue.nodes.len)) catch |e| {
                     r = Result(DialogueContext).fmt_err(alloc, "{}", .{e});
                     return r;
                 };
 
-                for (dialogue.nodes, 0..) |json_node, i| {
+                for (json_dialogue.nodes, 0..) |json_node, i| {
                     if (json_node.toNode(alloc, &booleans)) |node| {
                         nodes.append(alloc, node) catch |e| {
                             r = Result(DialogueContext).fmt_err(alloc, "{}", .{e});
                             return r;
                         };
 
+                        // TODO: push out to verify nodes function
                         switch (node) {
                             inline .reply, .random_switch => |v| {
                                 for (v.nexts) |maybe_next| {
-                                    if (maybe_next.toOptionalInt(usize)) |next| if (next >= dialogue.nodes.len) {
+                                    if (maybe_next.toOptionalInt(usize)) |next| if (next >= json_dialogue.nodes.len) {
                                         r = Result(DialogueContext).fmt_err(alloc, "bad next node '{}' on node '{}'", .{ next, i });
                                         return r;
                                     };
@@ -347,7 +353,7 @@ pub const DialogueContext = struct {
                                     else => {},
                                 }
                             },
-                            inline else => |n| if (n.next.toOptionalInt(usize)) |next| if (next >= dialogue.nodes.len) {
+                            inline else => |n| if (n.next.toOptionalInt(usize)) |next| if (next >= json_dialogue.nodes.len) {
                                 r = Result(DialogueContext).fmt_err(alloc, "bad next node '{}' on node '{}'", .{ next, i });
                                 return r;
                             },
@@ -366,6 +372,10 @@ pub const DialogueContext = struct {
                 };
             }
         }
+
+        defer if (r.is_err()) {
+            for (dialogues) |*d| d.deinit(alloc);
+        };
 
         const step_options_buffer = MutSlice(Line).fromZig(alloc.alloc(Line, max_option_count) catch unreachable);
         const step_option_ids_buffer = MutSlice(usize).fromZig(alloc.alloc(usize, max_option_count) catch unreachable);
