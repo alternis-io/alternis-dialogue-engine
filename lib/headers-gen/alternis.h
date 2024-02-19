@@ -13,6 +13,7 @@ extern "C" {
 #include <stddef.h> // for size_t
 
 typedef unsigned char zigbool; // extern bool as defined by zig
+typedef uint32_t usz; // configured id type for alternis
 
 void ade_set_alloc(void*(*const in_malloc)(size_t), void(*const in_free)(void*));
 
@@ -65,10 +66,10 @@ DialogueContext* ade_dialogue_ctx_create_json(
     const char** err
 );
 
-void ade_dialogue_ctx_destroy(DialogueContext* ctx, uint32_t dialogue_id);
-void ade_dialogue_ctx_reset(DialogueContext* ctx, uint32_t dialogue_id, size_t node_index);
-void ade_dialogue_ctx_reply(DialogueContext* ctx, uint32_t dialogue_id, size_t reply_id);
-size_t ade_dialogue_ctx_get_node_by_label(DialogueContext* ctx, uint32_t dialogue_id, const char* label_ptr, size_t label_len);
+void ade_dialogue_ctx_destroy(DialogueContext* ctx);
+void ade_dialogue_ctx_reset(DialogueContext* ctx, usz dialogue_id, size_t node_index);
+void ade_dialogue_ctx_reply(DialogueContext* ctx, usz dialogue_id, size_t reply_id);
+size_t ade_dialogue_ctx_get_node_by_label(DialogueContext* ctx, usz dialogue_id, const char* label_ptr, size_t label_len);
 
 void ade_dialogue_ctx_set_callback(
     DialogueContext* ctx,
@@ -104,7 +105,7 @@ void ade_dialogue_ctx_set_variable_string(
     size_t value_len
 );
 
-void ade_dialogue_ctx_step(DialogueContext* ctx, uint32_t dialogue_id, StepResult* return_val);
+void ade_dialogue_ctx_step(DialogueContext* ctx, usz dialogue_id, StepResult* return_val);
 
 #ifdef __cplusplus
 } // extern "C"
