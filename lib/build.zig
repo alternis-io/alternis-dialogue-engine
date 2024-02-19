@@ -25,8 +25,8 @@ pub fn build(b: *std.Build) void {
     });
     shared_lib.force_pic = true;
     b.installArtifact(shared_lib);
-    const install_shared_header = b.addInstallFile(shared_lib.getEmittedH(), "include");
-    b.getInstallStep().dependOn(&install_shared_header.step);
+    //const install_shared_header = b.addInstallFile(shared_lib.getEmittedH(), "api.h");
+    //b.getInstallStep().dependOn(&install_shared_header.step);
 
     const test_filter = b.option([]const u8, "test-filter", "filter for test subcommand");
     const main_tests = b.addTest(.{ .root_source_file = .{ .path = "src/c_api.zig" }, .target = target, .optimize = optimize, .filter = test_filter });
@@ -73,7 +73,7 @@ pub fn build(b: *std.Build) void {
             .target = platform_target,
             .optimize = optimize,
         });
-        const install_header = b.addInstallFile(lib.getEmittedH(), "include");
+        //const install_header = b.addInstallFile(lib.getEmittedH(), "api.h");
         lib.force_pic = true;
         // FIXME: avoid doing this except for the godot case,
         // otherwise roundq is undefined reference when linked into the gdextension
@@ -88,7 +88,7 @@ pub fn build(b: *std.Build) void {
             lib.linkSystemLibrary2("ntdll", .{ .needed = true });
         }
 
-        all_step.dependOn(&install_header.step);
+        //all_step.dependOn(&install_header.step);
         all_step.dependOn(&install_lib.step);
     }
 
