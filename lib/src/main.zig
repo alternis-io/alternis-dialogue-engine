@@ -42,6 +42,11 @@ test "Next is u32" {
     try t.expectEqual(@bitSizeOf(Next), 32);
 }
 
+test "next toOptionalInt" {
+    try t.expectEqual((Next{ .valid = true, .value = 1 }).toOptionalInt(u32), @as(u32, 1));
+    try t.expectEqual((Next{ .valid = false, .value = 1 }).toOptionalInt(u32), null);
+}
+
 const Line = extern struct {
     speaker: Slice(u8),
     text: Slice(u8),
@@ -353,10 +358,11 @@ pub const DialogueContext = struct {
                                     else => {},
                                 }
                             },
-                            inline else => |n| if (n.next.toOptionalInt(usize)) |next| if (next >= json_dialogue.nodes.len) {
-                                r = Result(DialogueContext).fmt_err(alloc, "bad next node '{}' on node '{}'", .{ next, i });
-                                return r;
-                            },
+                            inline else => |n| if (n.next.toOptionalInt(usize)) |next|
+                                if (next >= json_dialogue.nodes.len) {
+                                    r = Result(DialogueContext).fmt_err(alloc, "bad next node '{}' on node '{}'", .{ next, i });
+                                    return r;
+                                },
                         }
                     } else {
                         r = Result(DialogueContext).fmt_err(alloc, "invalid node (index={}) without type or data", .{i});
@@ -453,9 +459,9 @@ pub const DialogueContext = struct {
     }
 
     // FIXME: isn't this technically next node?
-    /// returns -1 if current node index is invalid. 0 is the entry node
-    pub fn getCurrentNodeIndex(self: *@This(), dialogue_id: usz) usz {
-        return @intCast(self.dialogues[dialogue_id].current_node_index orelse ~@as(usz, 0));
+    // FIXME: public only for testing
+    pub fn getCurrentNodeIndex(self: *@This(), dialogue_id: usz) ?usz {
+        return if (self.dialogues[dialogue_id].current_node_index) |val| @intCast(val) else null;
     }
 
     pub fn setCallback(self: *@This(), name: []const u8, callback: Callback) void {
@@ -535,7 +541,7 @@ pub const DialogueContext = struct {
         if (self.do_interpolate and self.step_result_buffer != null)
             self.step_result_buffer.?.free(self.arena.allocator());
 
-        var dialogue = self.dialogues[dialogue_id];
+        const dialogue = &self.dialogues[dialogue_id];
 
         // all returns in this function must set and then return this variable
         var result: StepResult = undefined;

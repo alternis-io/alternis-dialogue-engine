@@ -1,129 +1,133 @@
 {
   "version": 1,
   "entryId": 0,
-  "nodes": [
-    {
-      "line": {
-        "data": {
-          "speaker": "Aisha",
-          "text": "Hey"
-        },
-        "next": 1
-      }
-    },
-    {
-      "random_switch": {
-        "nexts": [
-          2,
-          10
-        ],
-        "chances": [
-          1,
-          9
-        ]
-      }
-    },
-    {
-      "line": {
-        "data": {
-          "speaker": "Aaron",
-          "text": "WELL HELLO"
-        },
-        "next": 3
-      }
-    },
-    {
-      "line": {
-        "data": {
-          "speaker": "Aaron",
-          "text": "What's your name?"
-        },
-        "next": 4
-      }
-    },
-    {
-      "call": {
-        "function_name": "ask player name",
-        "next": 5
-      }
-    },
-    {
-      "reply": {
-        "nexts": [
-          6,
-          8,
-          9
-        ],
-        "texts": [
-          {
-            "text": "It's {name} and I like waffles",
-            "speaker": "Aisha"
-          },
-          {
-            "text": "It's {name}",
-            "speaker": "Aisha"
-          },
-          {
-            "text": "Wanna go eat waffles?",
-            "speaker": "Aisha"
+  "dialogues": {
+    "sample1": {
+      "nodes": [
+        {
+          "line": {
+            "data": {
+              "speaker": "Aisha",
+              "text": "Hey"
+            },
+            "next": 1
           }
-        ],
-        "conditions": [
-          {
-            "action": "none"
-          },
-          {
-            "action": "none"
-          },
-          {
-            "action": "unlocked",
-            "variable": "Aaron likes you"
+        },
+        {
+          "random_switch": {
+            "nexts": [
+              2,
+              10
+            ],
+            "chances": [
+              1,
+              9
+            ]
           }
-        ]
-      }
-    },
-    {
-      "unlock": {
-        "boolean_var_name": "Aaron likes you",
-        "next": 7
-      }
-    },
-    {
-      "line": {
-        "data": {
-          "speaker": "Aaron",
-          "text": "You're pretty cool!\nWhat was your name again?"
         },
-        "next": 5
-      }
-    },
-    {
-      "line": {
-        "data": {
-          "speaker": "Aaron",
-          "text": "Ok. What was your name again?"
+        {
+          "line": {
+            "data": {
+              "speaker": "Aaron",
+              "text": "WELL HELLO"
+            },
+            "next": 3
+          }
         },
-        "next": 5
-      }
-    },
-    {
-      "line": {
-        "data": {
-          "speaker": "Aaron",
-          "text": "Yeah, {name}."
+        {
+          "line": {
+            "data": {
+              "speaker": "Aaron",
+              "text": "What's your name?"
+            },
+            "next": 4
+          }
+        },
+        {
+          "call": {
+            "function_name": "ask player name",
+            "next": 5
+          }
+        },
+        {
+          "reply": {
+            "nexts": [
+              6,
+              8,
+              9
+            ],
+            "texts": [
+              {
+                "text": "It's {name} and I like waffles",
+                "speaker": "Aisha"
+              },
+              {
+                "text": "It's {name}",
+                "speaker": "Aisha"
+              },
+              {
+                "text": "Wanna go eat waffles?",
+                "speaker": "Aisha"
+              }
+            ],
+            "conditions": [
+              {
+                "action": "none"
+              },
+              {
+                "action": "none"
+              },
+              {
+                "action": "unlocked",
+                "variable": "Aaron likes you"
+              }
+            ]
+          }
+        },
+        {
+          "unlock": {
+            "boolean_var_name": "Aaron likes you",
+            "next": 7
+          }
+        },
+        {
+          "line": {
+            "data": {
+              "speaker": "Aaron",
+              "text": "You're pretty cool!\nWhat was your name again?"
+            },
+            "next": 5
+          }
+        },
+        {
+          "line": {
+            "data": {
+              "speaker": "Aaron",
+              "text": "Ok. What was your name again?"
+            },
+            "next": 5
+          }
+        },
+        {
+          "line": {
+            "data": {
+              "speaker": "Aaron",
+              "text": "Yeah, {name}."
+            }
+          }
+        },
+        {
+          "line": {
+            "data": {
+              "speaker": "Aaron",
+              "text": "Yo"
+            },
+            "next": 3
+          }
         }
-      }
-    },
-    {
-      "line": {
-        "data": {
-          "speaker": "Aaron",
-          "text": "Yo"
-        },
-        "next": 3
-      }
+      ]
     }
-  ],
+  },
   "participants": [
     {
       "name": "Aisha"
