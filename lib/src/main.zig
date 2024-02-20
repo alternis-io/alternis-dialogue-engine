@@ -420,12 +420,10 @@ pub const DialogueContext = struct {
         for (self.dialogues) |*dialogue| {
             // FIXME: nodes should encapsulate their own freeing logic better
             {
-                // FIXME: probably better to iterate on .data simultaneously
                 const nodes_slice = dialogue.nodes.slice();
-                for (nodes_slice.items(.tags), 0..) |tag, index| {
+                for (nodes_slice.items(.tags), nodes_slice.items(.data)) |tag, data| {
                     if (tag != .reply) continue;
-                    const value = nodes_slice.get(index);
-                    alloc.free(value.reply.conditions);
+                    alloc.free(data.reply.conditions);
                 }
             }
 
