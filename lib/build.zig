@@ -10,8 +10,8 @@ pub fn build(b: *std.Build) void {
         .root_source_file = .{ .path = "src/c_api.zig" },
         .target = target,
         .optimize = optimize,
+        .pic = true,
     });
-    native_lib.force_pic = true;
     // FIXME: avoid doing this except for the godot case,
     // otherwise roundq is undefined reference when linked into the gdextension
     native_lib.bundle_compiler_rt = true;
@@ -22,8 +22,8 @@ pub fn build(b: *std.Build) void {
         .root_source_file = .{ .path = "src/c_api.zig" },
         .target = target,
         .optimize = optimize,
+        .pic = true,
     });
-    shared_lib.force_pic = true;
     b.installArtifact(shared_lib);
     //const install_shared_header = b.addInstallFile(shared_lib.getEmittedH(), "api.h");
     //b.getInstallStep().dependOn(&install_shared_header.step);
@@ -37,18 +37,19 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&run_main_tests.step);
 
     var web_target = target;
-    web_target.cpu_arch = .wasm32;
-    web_target.os_tag = .freestanding;
+    web_target.result.cpu.arch = .wasm32;
+    web_target.result.os.tag = .freestanding;
 
     const web_step = b.step("web", "Build for web");
     const web_lib = b.addSharedLibrary(.{
         .name = "alternis",
-        .root_source_file = std.build.FileSource.relative("src/wasm_main.zig"),
+        .root_source_file = .{ .cwd_relative = "src/wasm_main.zig" },
         .target = web_target,
         .optimize = optimize,
     });
     web_lib.rdynamic = true;
-    web_lib.export_symbol_names = &.{"ade_set_alloc"};
+    // FIXME: zig 0.12
+    // web_lib.export_symbol_names = &.{"ade_set_alloc"};
     b.installArtifact(web_lib);
     const web_lib_install = b.addInstallArtifact(web_lib, .{});
     web_step.dependOn(&web_lib_install.step);
@@ -69,12 +70,12 @@ pub fn build(b: *std.Build) void {
         const name = std.fmt.comptimePrint("alternis-{s}", .{platform});
         const lib = b.addStaticLibrary(.{
             .name = name,
-            .root_source_file = std.build.FileSource.relative("src/c_api.zig"),
-            .target = platform_target,
+            .root_source_file = .{ .cwd_relative = "src/c_api.zig" },
+            .target = b.resolveTargetQuery(platform_target),
             .optimize = optimize,
+            .pic = true,
         });
         //const install_header = b.addInstallFile(lib.getEmittedH(), "api.h");
-        lib.force_pic = true;
         // FIXME: avoid doing this except for the godot case,
         // otherwise roundq is undefined reference when linked into the gdextension
         lib.bundle_compiler_rt = true;
