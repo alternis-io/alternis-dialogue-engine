@@ -5,6 +5,7 @@
 # zig
 zig-out
 zig-cache
+.zig-cache
 
 # clangd
 compile_commands.json

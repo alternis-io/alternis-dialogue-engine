@@ -7,7 +7,7 @@ pub fn build(b: *std.Build) void {
 
     const native_lib = b.addStaticLibrary(.{
         .name = "alternis",
-        .root_source_file = .{ .path = "src/c_api.zig" },
+        .root_source_file = b.path("src/c_api.zig"),
         .target = target,
         .optimize = optimize,
         .pic = true,
@@ -19,7 +19,7 @@ pub fn build(b: *std.Build) void {
 
     const shared_lib = b.addSharedLibrary(.{
         .name = "alternis",
-        .root_source_file = .{ .path = "src/c_api.zig" },
+        .root_source_file = b.path("src/c_api.zig"),
         .target = target,
         .optimize = optimize,
         .pic = true,
@@ -29,7 +29,12 @@ pub fn build(b: *std.Build) void {
     //b.getInstallStep().dependOn(&install_shared_header.step);
 
     const test_filter = b.option([]const u8, "test-filter", "filter for test subcommand");
-    const main_tests = b.addTest(.{ .root_source_file = .{ .path = "src/c_api.zig" }, .target = target, .optimize = optimize, .filter = test_filter });
+    const main_tests = b.addTest(.{
+        .root_source_file = b.path("src/c_api.zig"),
+        .target = target,
+        .optimize = optimize,
+        .filter = test_filter,
+    });
     main_tests.linkLibC(); // c api tests use libc malloc as the user configured allocator
     const run_main_tests = b.addRunArtifact(main_tests);
 
@@ -85,7 +90,7 @@ pub fn build(b: *std.Build) void {
         // FIXME: try this https://stackoverflow.com/questions/75185166/how-to-bundle-a-static-library-with-an-import-library-or-two-static-libraries
         if (std.mem.endsWith(u8, platform, "-msvc")) {
             //std.log.
-            lib.addLibraryPath(.{ .path = "C:/Program Files (x86)/Windows Kits/10/Lib/10.0.18362.0/um/x64" });
+            lib.addLibraryPath(b.path("C:/Program Files (x86)/Windows Kits/10/Lib/10.0.18362.0/um/x64"));
             lib.linkSystemLibrary2("ntdll", .{ .needed = true });
         }
 
