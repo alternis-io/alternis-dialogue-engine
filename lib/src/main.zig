@@ -2,7 +2,6 @@ const std = @import("std");
 const builtin = @import("builtin");
 const json = std.json;
 const t = std.testing;
-const Result = @import("./result.zig").Result;
 const Slice = @import("./slice.zig").Slice;
 const OptSlice = @import("./slice.zig").OptSlice;
 const MutSlice = @import("./slice.zig").MutSlice;
@@ -202,7 +201,6 @@ pub const DialogueContext = struct {
     /// when using string variable interpolation
     step_result_buffer: ?StepResult = null,
 
-    // FIXME: the alignments are stupid large here
     pub const StepResult = extern struct {
         /// tag indicates which field is active
         tag: enum(u8) {
@@ -246,11 +244,35 @@ pub const DialogueContext = struct {
         // textPlugin: TextPlugin? = null,
     };
 
+    pub const Diagnostic = extern struct {
+        err: []const u8 = undefined,
+        allocator: ?std.mem.Allocator = null,
+
+        /// caller owned memory (e.g. string literal). probably don't use with anything
+        /// that must be freed
+        fn new(str: []const u8) @This() {
+            return @This(){ .err = str };
+        }
+
+        fn format(alloc: std.mem.Allocator, fmt_str: []const u8, fmt_args: anytype) @This() {
+            return @This(){
+                .err = std.fmt.allocPrint(alloc, fmt_str, fmt_args),
+                .allocator = alloc,
+            };
+        }
+
+        fn free(self: @This()) void {
+            if (self.allocator) |alloc|
+                alloc.free(self.err);
+        }
+    };
+
     pub fn initFromJson(
         json_text: []const u8,
         alloc: std.mem.Allocator,
         opts: InitOpts,
-    ) Result(DialogueContext) {
+        diagnostic: *Diagnostic,
+    ) !DialogueContext {
         var r = Result(DialogueContext).err("not initialized");
 
         // FIXME: use a separate arena for json parsing, deinit it that one,
