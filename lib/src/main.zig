@@ -245,25 +245,27 @@ pub const DialogueContext = struct {
     };
 
     pub const Diagnostic = extern struct {
-        err: []const u8 = undefined,
-        allocator: ?std.mem.Allocator = null,
+        error_message: []const u8 = undefined,
+        _needs_free: bool = false,
 
-        /// caller owned memory (e.g. string literal). probably don't use with anything
-        /// that must be freed
         fn new(str: []const u8) @This() {
             return @This(){ .err = str };
         }
 
-        fn format(alloc: std.mem.Allocator, fmt_str: []const u8, fmt_args: anytype) @This() {
+        fn from_err(err: anyerror) @This() {
+            return @This(){ .err = @errorName(err) };
+        }
+
+        fn format(alloc: std.mem.Allocator, comptime fmt_str: []const u8, fmt_args: anytype) @This() {
             return @This(){
-                .err = std.fmt.allocPrint(alloc, fmt_str, fmt_args),
-                .allocator = alloc,
+                .error_message = std.fmt.allocPrint(alloc, fmt_str, fmt_args),
+                ._needs_free = true,
             };
         }
 
-        fn free(self: @This()) void {
-            if (self.allocator) |alloc|
-                alloc.free(self.err);
+        fn free(self: @This(), maybe_alloc: ?std.mem.Allocator) void {
+            if (maybe_alloc) |alloc| if (self._needs_free)
+                alloc.free(self.error_message);
         }
     };
 
@@ -273,7 +275,7 @@ pub const DialogueContext = struct {
         opts: InitOpts,
         diagnostic: *Diagnostic,
     ) !DialogueContext {
-        var r = Result(DialogueContext).err("not initialized");
+        diagnostic.* = Diagnostic.new("No context. See error code");
 
         // FIXME: use a separate arena for json parsing, deinit it that one,
         // and deep clone out all needed strings into this one (@see toNodeAlloc)
@@ -290,48 +292,37 @@ pub const DialogueContext = struct {
             .ignore_unknown_fields = true,
             .allocate = .alloc_always,
         }) catch |e| {
-            r = Result(DialogueContext).fmt_err(alloc, "{}: {}", .{ e, json_diagnostics });
-            return r;
+            diagnostic.* = Diagnostic.format(alloc, "{}: {}", .{ e, json_diagnostics });
+            return e;
         };
 
         if (data.version != 1) {
-            r = Result(DialogueContext).fmt_err(alloc, "unknown file version. Only version '1' is supported by this engine", .{});
-            return r;
+            diagnostic.* = Diagnostic.format(alloc, "unknown file version '{}'. This engine supports only version '1'", .{data.version});
+            return error.AlternisUnknownVersion;
         }
 
         var booleans = std.StringHashMap(bool).init(alloc);
-        booleans.ensureTotalCapacity(@intCast(data.variables.boolean.len)) catch |e| {
-            r = Result(DialogueContext).fmt_err(alloc, "{}", .{e});
-            return r;
-        };
+        try booleans.ensureTotalCapacity(@intCast(data.variables.boolean.len));
+
         // FIXME: this is super broken methinks, both StringHashMap says key memory is owned by caller, which means gets will never work since
         // they don't have access to the mmaped JSON
         for (data.variables.boolean) |json_var|
             booleans.put(json_var.name, false) catch |e| std.debug.panic("put memory error: {}", .{e});
 
         var strings = std.StringHashMap([]const u8).init(alloc);
-        strings.ensureTotalCapacity(@intCast(data.variables.string.len)) catch |e| {
-            r = Result(DialogueContext).fmt_err(alloc, "{}", .{e});
-            return r;
-        };
+        try strings.ensureTotalCapacity(@intCast(data.variables.string.len));
         for (data.variables.string) |json_var| {
             strings.put(json_var.name, "<UNSET>") catch |e| std.debug.panic("put memory error: {}", .{e});
         }
 
         var functions = std.StringHashMap(?Callback).init(alloc);
-        functions.ensureTotalCapacity(@intCast(data.functions.len)) catch |e| {
-            r = Result(DialogueContext).fmt_err(alloc, "{}", .{e});
-            return r;
-        };
+        try functions.ensureTotalCapacity(@intCast(data.functions.len));
         for (data.functions) |json_func|
             functions.put(json_func.name, null) catch |e| std.debug.panic("put memory error: {}", .{e});
 
         var max_option_count: usize = 0;
 
-        var dialogues = arena_alloc.alloc(Dialogue, data.dialogues.map.count()) catch |e| {
-            r = Result(DialogueContext).fmt_err(alloc, "{}", .{e});
-            return r;
-        };
+        var dialogues = try arena_alloc.alloc(Dialogue, data.dialogues.map.count());
 
         const string_pool = StringPool{};
 
@@ -345,31 +336,22 @@ pub const DialogueContext = struct {
                 const out_dialogue = &dialogues[dialogue_index];
 
                 var nodes = std.MultiArrayList(Node){};
-                nodes.ensureTotalCapacity(alloc, @intCast(json_dialogue.nodes.len)) catch |e| {
-                    r = Result(DialogueContext).fmt_err(alloc, "{}", .{e});
-                    return r;
-                };
+                try nodes.ensureTotalCapacity(alloc, @intCast(json_dialogue.nodes.len));
 
                 var label_to_node_ids = std.StringHashMapUnmanaged(usz){};
-                label_to_node_ids.ensureTotalCapacity(alloc, @intCast(json_dialogue.nodes.len)) catch |e| {
-                    r = Result(DialogueContext).fmt_err(alloc, "{}", .{e});
-                    return r;
-                };
+                try label_to_node_ids.ensureTotalCapacity(alloc, @intCast(json_dialogue.nodes.len));
 
                 for (json_dialogue.nodes, 0..) |json_node, i| {
                     if (json_node.toNode(alloc, &booleans)) |node| {
-                        nodes.append(alloc, node) catch |e| {
-                            r = Result(DialogueContext).fmt_err(alloc, "{}", .{e});
-                            return r;
-                        };
+                        try nodes.append(alloc, node);
 
                         // TODO: push out to verify nodes function
                         switch (node) {
                             inline .reply, .random_switch => |v| {
                                 for (v.nexts) |maybe_next| {
                                     if (maybe_next.toOptionalInt(usize)) |next| if (next >= json_dialogue.nodes.len) {
-                                        r = Result(DialogueContext).fmt_err(alloc, "bad next node '{}' on node '{}'", .{ next, i });
-                                        return r;
+                                        diagnostic.* = Diagnostic.format(alloc, "bad next node '{}' on node '{}'", .{ next, i });
+                                        return error.AlternisBadNextNode;
                                     };
                                 }
 
@@ -382,13 +364,13 @@ pub const DialogueContext = struct {
                             },
                             inline else => |n| if (n.next.toOptionalInt(usize)) |next|
                                 if (next >= json_dialogue.nodes.len) {
-                                    r = Result(DialogueContext).fmt_err(alloc, "bad next node '{}' on node '{}'", .{ next, i });
-                                    return r;
+                                    diagnostic.* = Diagnostic.format(alloc, "bad next node '{}' on node '{}'", .{ next, i });
+                                    return error.AlternisBadNextNode;
                                 },
                         }
                     } else {
-                        r = Result(DialogueContext).fmt_err(alloc, "invalid node (index={}) without type or data", .{i});
-                        return r;
+                        diagnostic.* = Diagnostic.format(alloc, "invalid node (index={}) without type or data", .{i});
+                        return error.AlternisInvalidNode;
                     }
                 }
 
