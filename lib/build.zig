@@ -41,19 +41,18 @@ pub fn build(b: *std.Build) void {
     const test_step = b.step("test", "Run library tests");
     test_step.dependOn(&run_main_tests.step);
 
-    var web_target = target;
-    web_target.result.cpu.arch = .wasm32;
-    web_target.result.os.tag = .freestanding;
+    const web_target_query = CrossTarget.parse(.{ .arch_os_abi = "wasm32-freestanding" }) catch unreachable;
+    const web_target = b.resolveTargetQuery(web_target_query);
 
     const web_step = b.step("web", "Build for web");
-    const web_lib = b.addSharedLibrary(.{
+    const web_lib = b.addExecutable(.{
         .name = "alternis",
         .root_source_file = .{ .cwd_relative = "src/wasm_main.zig" },
         .target = web_target,
         .optimize = optimize,
     });
     web_lib.rdynamic = true;
-    // FIXME: zig 0.12
+    web_lib.entry = .disabled;
     // web_lib.export_symbol_names = &.{"ade_set_alloc"};
     b.installArtifact(web_lib);
     const web_lib_install = b.addInstallArtifact(web_lib, .{});

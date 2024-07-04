@@ -15,6 +15,7 @@ const FileBuffer = @import("./FileBuffer.zig");
 
 const ConfigurableSimpleAlloc = @import("./simple_alloc.zig").ConfigurableSimpleAlloc;
 var configured_raw_alloc: ?ConfigurableSimpleAlloc = null;
+
 var alloc: std.mem.Allocator =
     if (builtin.os.tag == .freestanding and builtin.target.cpu.arch == .wasm32)
     std.heap.wasm_allocator
@@ -48,7 +49,7 @@ export fn ade_dialogue_ctx_create_json(json_ptr: [*]const u8, json_len: usize, r
         return null;
     }
 
-    var ctx_slot = alloc.create(Api.DialogueContext) catch |e| std.debug.panic("alloc error: {}", .{e});
+    const ctx_slot = alloc.create(Api.DialogueContext) catch |e| std.debug.panic("alloc error: {}", .{e});
     ctx_slot.* = ctx_result.value;
 
     return ctx_slot;
