@@ -17,6 +17,9 @@ pub fn build(b: *std.Build) void {
     native_lib.bundle_compiler_rt = true;
     b.installArtifact(native_lib);
 
+    const install_shared_header = b.addInstallHeaderFile(native_lib.getEmittedH(), "api.h");
+    b.getInstallStep().dependOn(&install_shared_header.step);
+
     const shared_lib = b.addSharedLibrary(.{
         .name = "alternis",
         .root_source_file = b.path("src/c_api.zig"),
@@ -25,8 +28,6 @@ pub fn build(b: *std.Build) void {
         .pic = true,
     });
     b.installArtifact(shared_lib);
-    //const install_shared_header = b.addInstallFile(shared_lib.getEmittedH(), "api.h");
-    //b.getInstallStep().dependOn(&install_shared_header.step);
 
     const test_filter = b.option([]const u8, "test-filter", "filter for test subcommand");
     const main_tests = b.addTest(.{
