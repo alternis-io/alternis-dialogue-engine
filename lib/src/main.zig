@@ -245,6 +245,8 @@ pub const DialogueContext = struct {
     };
 
     pub const Diagnostic = extern struct {
+        // NOTE: could add fields/union variants for the dynamic parts of the error messages,
+        // but not sure we need it in practice and it would be cumbersome here
         error_message: []const u8 = undefined,
         _needs_free: bool = false,
 
@@ -307,18 +309,18 @@ pub const DialogueContext = struct {
         // FIXME: this is super broken methinks, both StringHashMap says key memory is owned by caller, which means gets will never work since
         // they don't have access to the mmaped JSON
         for (data.variables.boolean) |json_var|
-            booleans.put(json_var.name, false) catch |e| std.debug.panic("put memory error: {}", .{e});
+            try booleans.put(json_var.name, false);
 
         var strings = std.StringHashMap([]const u8).init(alloc);
         try strings.ensureTotalCapacity(@intCast(data.variables.string.len));
         for (data.variables.string) |json_var| {
-            strings.put(json_var.name, "<UNSET>") catch |e| std.debug.panic("put memory error: {}", .{e});
+            try strings.put(json_var.name, "<UNSET>");
         }
 
         var functions = std.StringHashMap(?Callback).init(alloc);
         try functions.ensureTotalCapacity(@intCast(data.functions.len));
         for (data.functions) |json_func|
-            functions.put(json_func.name, null) catch |e| std.debug.panic("put memory error: {}", .{e});
+            try functions.put(json_func.name, null);
 
         var max_option_count: usize = 0;
 
@@ -330,7 +332,7 @@ pub const DialogueContext = struct {
             var dialogue_iter = data.dialogues.map.iterator();
             var dialogue_index: usize = 0;
             while (dialogue_iter.next()) |dialogue_entry| : (dialogue_index += 1) {
-                const dialogue_name = alloc.dupe(u8, dialogue_entry.key_ptr.*) catch |e| std.debug.panic("put memory error: {}", .{e});
+                const dialogue_name = try alloc.dupe(u8, dialogue_entry.key_ptr.*);
 
                 const json_dialogue = dialogue_entry.value_ptr.*;
                 const out_dialogue = &dialogues[dialogue_index];
@@ -383,17 +385,17 @@ pub const DialogueContext = struct {
             }
         }
 
-        defer if (r.is_err()) {
+        errdefer {
             for (dialogues) |*d| d.deinit(alloc);
-        };
+        }
 
         const step_options_buffer = MutSlice(Line).fromZig(alloc.alloc(Line, max_option_count) catch unreachable);
         const step_option_ids_buffer = MutSlice(usize).fromZig(alloc.alloc(usize, max_option_count) catch unreachable);
 
         const seed = opts.random_seed orelse _: {
             if (builtin.os.tag == .freestanding) {
-                r = Result(DialogueContext).fmt_err_src(alloc, "automatic seed not supported on this platform", .{}, @src());
-                return r;
+                diagnostic.* = Diagnostic.format(alloc, "automatic seed not supported on this platform", .{}, @src());
+                return error.AlternisDefaultSeedUnsupportedPlatform;
             }
 
             const time = std.time.microTimestamp();
@@ -401,7 +403,7 @@ pub const DialogueContext = struct {
             break :_ time_seed;
         };
 
-        r = Result(DialogueContext).ok(.{
+        return DialogueContext{
             // FIXME:
             .string_pool = string_pool,
             .dialogues = dialogues,
@@ -415,9 +417,7 @@ pub const DialogueContext = struct {
             .step_options_buffer = step_options_buffer,
             .step_option_ids_buffer = step_option_ids_buffer,
             .do_interpolate = !opts.no_interpolate,
-        });
-
-        return r;
+        };
     }
 
     pub fn deinit(self: *@This(), alloc: std.mem.Allocator) void {
