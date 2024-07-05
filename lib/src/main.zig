@@ -247,27 +247,27 @@ pub const DialogueContext = struct {
     pub const Diagnostic = extern struct {
         // NOTE: could add fields/union variants for the dynamic parts of the error messages,
         // but not sure we need it in practice and it would be cumbersome here
-        error_message: []const u8 = undefined,
+        error_message: Slice(u8) = undefined,
         _needs_free: bool = false,
 
         fn new(str: []const u8) @This() {
-            return @This(){ .err = str };
+            return @This(){ .error_message = Slice(u8).fromZig(str) };
         }
 
         fn from_err(err: anyerror) @This() {
-            return @This(){ .err = @errorName(err) };
+            return @This(){ .error_message = Slice(u8).fromZig(@errorName(err)) };
         }
 
-        fn format(alloc: std.mem.Allocator, comptime fmt_str: []const u8, fmt_args: anytype) @This() {
+        fn format(alloc: std.mem.Allocator, comptime fmt_str: []const u8, fmt_args: anytype) !@This() {
             return @This(){
-                .error_message = std.fmt.allocPrint(alloc, fmt_str, fmt_args),
+                .error_message = Slice(u8).fromZig(try std.fmt.allocPrint(alloc, fmt_str, fmt_args)),
                 ._needs_free = true,
             };
         }
 
         fn free(self: @This(), maybe_alloc: ?std.mem.Allocator) void {
             if (maybe_alloc) |alloc| if (self._needs_free)
-                alloc.free(self.error_message);
+                alloc.free(self.error_message.toZig());
         }
     };
 
@@ -294,12 +294,12 @@ pub const DialogueContext = struct {
             .ignore_unknown_fields = true,
             .allocate = .alloc_always,
         }) catch |e| {
-            diagnostic.* = Diagnostic.format(alloc, "{}: {}", .{ e, json_diagnostics });
+            diagnostic.* = try Diagnostic.format(alloc, "{}: {}", .{ e, json_diagnostics });
             return e;
         };
 
         if (data.version != 1) {
-            diagnostic.* = Diagnostic.format(alloc, "unknown file version '{}'. This engine supports only version '1'", .{data.version});
+            diagnostic.* = try Diagnostic.format(alloc, "unknown file version '{}'. This engine supports only version '1'", .{data.version});
             return error.AlternisUnknownVersion;
         }
 
@@ -352,7 +352,7 @@ pub const DialogueContext = struct {
                             inline .reply, .random_switch => |v| {
                                 for (v.nexts) |maybe_next| {
                                     if (maybe_next.toOptionalInt(usize)) |next| if (next >= json_dialogue.nodes.len) {
-                                        diagnostic.* = Diagnostic.format(alloc, "bad next node '{}' on node '{}'", .{ next, i });
+                                        diagnostic.* = try Diagnostic.format(alloc, "bad next node '{}' on node '{}'", .{ next, i });
                                         return error.AlternisBadNextNode;
                                     };
                                 }
@@ -366,12 +366,12 @@ pub const DialogueContext = struct {
                             },
                             inline else => |n| if (n.next.toOptionalInt(usize)) |next|
                                 if (next >= json_dialogue.nodes.len) {
-                                    diagnostic.* = Diagnostic.format(alloc, "bad next node '{}' on node '{}'", .{ next, i });
+                                    diagnostic.* = try Diagnostic.format(alloc, "bad next node '{}' on node '{}'", .{ next, i });
                                     return error.AlternisBadNextNode;
                                 },
                         }
                     } else {
-                        diagnostic.* = Diagnostic.format(alloc, "invalid node (index={}) without type or data", .{i});
+                        diagnostic.* = try Diagnostic.format(alloc, "invalid node (index={}) without type or data", .{i});
                         return error.AlternisInvalidNode;
                     }
                 }
@@ -394,7 +394,7 @@ pub const DialogueContext = struct {
 
         const seed = opts.random_seed orelse _: {
             if (builtin.os.tag == .freestanding) {
-                diagnostic.* = Diagnostic.format(alloc, "automatic seed not supported on this platform", .{}, @src());
+                diagnostic.* = try Diagnostic.format(alloc, "automatic seed not supported on wasm platform", .{});
                 return error.AlternisDefaultSeedUnsupportedPlatform;
             }
 
