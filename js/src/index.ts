@@ -206,7 +206,7 @@ interface NativeModuleExports {
 
 let _nativeModulePromise: Promise<WasmHelper<NativeModuleExports>> | undefined;
 
-import initWasm from "../node_modules/alternis-wasm/zig-out/lib/alternis.wasm?init";
+import initWasm from "../node_modules/alternis-wasm/zig-out/bin/alternis.wasm?init";
 
 let importsInstance!: WebAssembly.Instance;
 
