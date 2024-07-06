@@ -52,8 +52,10 @@ export fn ade_dialogue_ctx_create_json(
         diagnostic,
     ) catch return null;
 
+    errdefer ctx_result.deinit(alloc);
+
     const ctx_slot = alloc.create(Api.DialogueContext) catch |e| std.debug.panic("alloc error: {}", .{e});
-    ctx_slot.* = ctx_result.value;
+    ctx_slot.* = ctx_result;
 
     return ctx_slot;
 }

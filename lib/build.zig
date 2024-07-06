@@ -17,8 +17,8 @@ pub fn build(b: *std.Build) void {
     native_lib.bundle_compiler_rt = true;
     b.installArtifact(native_lib);
 
-    const install_shared_header = b.addInstallHeaderFile(native_lib.getEmittedH(), "api.h");
-    b.getInstallStep().dependOn(&install_shared_header.step);
+    //const install_shared_header = b.addInstallHeaderFile(native_lib.getEmittedH(), "api.h");
+    //b.getInstallStep().dependOn(&install_shared_header.step);
 
     const shared_lib = b.addSharedLibrary(.{
         .name = "alternis",
