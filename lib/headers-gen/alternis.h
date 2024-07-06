@@ -58,12 +58,19 @@ struct StepResult {
     };
 };
 
+struct Diagnostic {
+    StringSlice error_message;
+    zigbool _needs_free;
+};
+
+void ade_diagnostic_destroy(Diagnostic self);
+
 DialogueContext* ade_dialogue_ctx_create_json(
     const char* json_ptr,
     size_t json_len,
     uint64_t randomSeed,
     zigbool no_interpolate,
-    const char** err
+    Diagnostic* const err
 );
 
 void ade_dialogue_ctx_destroy(DialogueContext* ctx);

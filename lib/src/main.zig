@@ -265,7 +265,7 @@ pub const DialogueContext = struct {
             };
         }
 
-        fn free(self: @This(), maybe_alloc: ?std.mem.Allocator) void {
+        pub fn free(self: @This(), maybe_alloc: ?std.mem.Allocator) void {
             if (maybe_alloc) |alloc| if (self._needs_free)
                 alloc.free(self.error_message.toZig());
         }

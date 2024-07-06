@@ -146,6 +146,10 @@ export fn ade_dialogue_ctx_step(dialogue_ctx: *Api.DialogueContext, dialogue_id:
     result_loc.?.* = dialogue_ctx.step(dialogue_id);
 }
 
+export fn ade_diagnostic_destroy(in_diagnostic: Api.DialogueContext.Diagnostic) void {
+    in_diagnostic.free(alloc);
+}
+
 // for now this just invokes failing allocator and panics...
 // test "create context without allocator set fails" {
 //     const dialogue = "{}";
