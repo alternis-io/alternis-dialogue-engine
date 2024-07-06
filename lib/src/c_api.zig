@@ -142,12 +142,11 @@ const Line = extern struct {
 };
 
 export fn ade_dialogue_ctx_step(dialogue_ctx: *Api.DialogueContext, dialogue_id: usz, result_loc: ?*Api.DialogueContext.StepResult) void {
-    std.debug.assert(result_loc != null);
-    result_loc.?.* = dialogue_ctx.step(dialogue_id);
+    (result_loc orelse return).* = dialogue_ctx.step(dialogue_id);
 }
 
-export fn ade_diagnostic_destroy(in_diagnostic: Api.DialogueContext.Diagnostic) void {
-    in_diagnostic.free(alloc);
+export fn ade_diagnostic_destroy(in_diagnostic: ?*Api.DialogueContext.Diagnostic) void {
+    (in_diagnostic orelse return).free(alloc);
 }
 
 // for now this just invokes failing allocator and panics...

@@ -63,7 +63,7 @@ struct Diagnostic {
     zigbool _needs_free;
 };
 
-void ade_diagnostic_destroy(Diagnostic self);
+void ade_diagnostic_destroy(Diagnostic* self);
 
 DialogueContext* ade_dialogue_ctx_create_json(
     const char* json_ptr,
