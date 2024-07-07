@@ -19,8 +19,6 @@ var configured_raw_alloc: ?ConfigurableSimpleAlloc = null;
 var alloc: std.mem.Allocator =
     if (builtin.os.tag == .freestanding and builtin.target.cpu.arch == .wasm32)
     std.heap.wasm_allocator
-    // note this is intended to be overridden by a call to ade_set_alloc
-    // FIXME: a null allocator state which yields a custom error is in order
 else
     std.testing.failing_allocator;
 
@@ -33,24 +31,23 @@ export fn ade_set_alloc(
     alloc = configured_raw_alloc.?.allocator();
 }
 
-/// set the allocator directly, useful when using the c_api and zig code (e.g. tests)
+/// the the allocator directly, possible from zig code
 pub fn setZigAlloc(in_alloc: std.mem.Allocator) void {
     alloc = in_alloc;
 }
 
-export fn ade_dialogue_ctx_create_json(
-    json_ptr: [*]const u8,
-    json_len: usize,
-    random_seed: u64,
-    no_interpolate: bool,
-    diagnostic: *Api.DialogueContext.Diagnostic,
-) ?*Api.DialogueContext {
+export fn ade_dialogue_ctx_create_json(json_ptr: [*]const u8, json_len: usize, random_seed: u64, no_interpolate: bool, err: ?*?[*:0]const u8) ?*Api.DialogueContext {
     const ctx_result = Api.DialogueContext.initFromJson(
         json_ptr[0..json_len],
         alloc,
         .{ .random_seed = random_seed, .no_interpolate = no_interpolate },
-        diagnostic,
-    ) catch return null;
+    );
+
+    // FIXME: better return err (e.g. this leaks)
+    if (ctx_result.is_err() and err != null) {
+        err.?.* = ctx_result.err.?.ptr;
+        return null;
+    }
 
     const ctx_slot = alloc.create(Api.DialogueContext) catch |e| std.debug.panic("alloc error: {}", .{e});
     ctx_slot.* = ctx_result.value;
