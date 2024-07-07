@@ -58,9 +58,20 @@ struct StepResult {
     };
 };
 
+typedef enum DiagnosticErrors {
+    OutOfMemory = 1,
+    MissingField = 2,
+    UnexpectedToken = 3,
+    AlternisUnknownVersion = 4,
+    AlternisBadNextNode = 5,
+    AlternisInvalidNode = 6,
+    AlternisDefaultSeedUnsupportedPlatform = 7,
+} DiagnosticErrors;
+
 struct Diagnostic {
-    StringSlice error_message;
     zigbool _needs_free;
+    int error_code;
+    StringSlice error_message;
 };
 
 void ade_diagnostic_destroy(Diagnostic* self);
@@ -70,7 +81,7 @@ DialogueContext* ade_dialogue_ctx_create_json(
     size_t json_len,
     uint64_t randomSeed,
     zigbool no_interpolate,
-    Diagnostic* const err
+    Diagnostic* const c_diagnostic
 );
 
 void ade_dialogue_ctx_destroy(DialogueContext* ctx);

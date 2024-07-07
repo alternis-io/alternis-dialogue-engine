@@ -38,23 +38,91 @@ pub fn setZigAlloc(in_alloc: std.mem.Allocator) void {
     alloc = in_alloc;
 }
 
-export fn ade_dialogue_ctx_create_json(
+const _InitDlgReturnType = @TypeOf(Api.DialogueContext.initFromJson).ReturnType;
+const _InitDlgErrorType = @typeInfo(_InitDlgReturnType).ErrorUnion.error_set;
+
+pub const DiagnosticErrors = enum(c_int) {
+    NoError = 0,
+
+    OutOfMemory = 1,
+
+    MissingField = 2,
+    UnexpectedToken = 3,
+
+    AlternisUnknownVersion = 4,
+    AlternisBadNextNode = 5,
+    AlternisInvalidNode = 6,
+    AlternisDefaultSeedUnsupportedPlatform = 7,
+
+    pub fn fromZig(err: _InitDlgErrorType) @This() {
+        return switch (err) {
+            error.OutOfMemory => .OutOfMemory,
+            error.MissingField => .MissingField,
+            error.UnexpectedToken => .UnexpectedToken,
+            error.AlternisUnknownVersion => .AlternisUnknownVersion,
+            error.AlternisBadNextNode => .AlternisBadNextNode,
+            error.AlternisInvalidNode => .AlternisInvalidNode,
+            error.AlternisDefaultSeedUnsupportedPlatform => .AlternisDefaultSeedUnsupportedPlatform,
+        };
+    }
+};
+
+pub const Diagnostic = extern struct {
+    // copied from Api.DialogueContext.Diagnostic
+    _needs_free: bool = false,
+    error_code: DiagnosticErrors = .NoError,
+    error_message: Slice(u8) = undefined,
+
+    pub export fn ade_diagnostic_destroy(maybe_self: ?*@This()) void {
+        if (maybe_self) |self| {
+            const zig_diagnostic = Api.DialogueContext.Diagnostic{
+                .error_message = self.error_message,
+                ._needs_free = self._needs_free,
+            };
+            zig_diagnostic.free(alloc);
+        }
+    }
+
+    pub fn fromZigErr(
+        err: _InitDlgErrorType,
+        zig_diagnostic: Api.DialogueContext.Diagnostic,
+    ) @This() {
+        var result = Diagnostic{};
+        result.error_code = DiagnosticErrors.fromZig(err);
+        result.error_message = zig_diagnostic.error_message;
+        result._needs_free = zig_diagnostic._needs_free;
+        return result;
+    }
+};
+
+/// when returning null, the diagnostic will be set with an error code
+pub export fn ade_dialogue_ctx_create_json(
     json_ptr: [*]const u8,
     json_len: usize,
     random_seed: u64,
     no_interpolate: bool,
-    diagnostic: *Api.DialogueContext.Diagnostic,
+    c_diagnostic: *Diagnostic,
 ) ?*Api.DialogueContext {
+    c_diagnostic.error_code = .NoError;
+    var zig_diagnostic = Diagnostic{};
+
     const ctx_result = Api.DialogueContext.initFromJson(
         json_ptr[0..json_len],
         alloc,
         .{ .random_seed = random_seed, .no_interpolate = no_interpolate },
-        diagnostic,
-    ) catch return null;
+        &zig_diagnostic,
+    ) catch |e| return {
+        c_diagnostic.* = Diagnostic.fromZigErr(e, zig_diagnostic);
+        return null;
+    };
 
     errdefer ctx_result.deinit(alloc);
 
-    const ctx_slot = alloc.create(Api.DialogueContext) catch |e| std.debug.panic("alloc error: {}", .{e});
+    const ctx_slot = alloc.create(Api.DialogueContext) catch |e| {
+        c_diagnostic.*.error_message = "failed to allocate, see error code";
+        c_diagnostic.*.error_code = DiagnosticErrors.fromZig(e);
+        c_diagnostic.*._needs_free = false;
+    };
     ctx_slot.* = ctx_result;
 
     return ctx_slot;
@@ -127,6 +195,7 @@ export fn ade_dialogue_ctx_set_all_callbacks(
     ctx.setAllCallbacks(.{ .function = @ptrCast(function), .payload = inner_payload });
 }
 
+// FIXME; store internal Line as extern and use functions to get zig slices
 const Line = extern struct {
     speaker: Slice(u8),
     text: Slice(u8),
@@ -145,15 +214,15 @@ export fn ade_dialogue_ctx_step(dialogue_ctx: *Api.DialogueContext, dialogue_id:
     (result_loc orelse return).* = dialogue_ctx.step(dialogue_id);
 }
 
-export fn ade_diagnostic_destroy(in_diagnostic: ?*Api.DialogueContext.Diagnostic) void {
-    (in_diagnostic orelse return).free(alloc);
-}
+// export fn ade_diagnostic_destroy(in_diagnostic: ?*Api.DialogueContext.Diagnostic) void {
+// (in_diagnostic orelse return).free(alloc);
+// }
 
 // for now this just invokes failing allocator and panics...
-// test "create context without allocator set fails" {
-//     const dialogue = "{}";
-//     try t.expectEqual(@as(?*Api.DialogueContext, null), ade_dialogue_ctx_create_json(dialogue.ptr, dialogue.len));
-// }
+test "create context without allocator set fails" {
+    const dialogue = "{}";
+    try t.expectEqual(@as(?*Api.DialogueContext, null), ade_dialogue_ctx_create_json(dialogue.ptr, dialogue.len));
+}
 
 // FIXME: source json from same file as main.zig tests
 test "run small dialogue under c api" {

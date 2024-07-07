@@ -279,7 +279,9 @@ export async function makeDialogueContext(json: string, opts: MakeDialogueContex
   const diagnosticSlot = nativeLib._instance.exports.malloc(DialogueContext.Diagnostic.byteSize);
   // use a function to defer DataView creation since growth can invalidate the view
   const getDiagnosticView = () => new DataView(nativeLib._instance.exports.memory.buffer, diagnosticSlot);
-  getDiagnosticView().setUint32(0, 0, true); // zero the memory
+  if (DialogueContext.Diagnostic.byteSize != 8) throw Error("incorrect byte size assumption");
+  getDiagnosticView().setUint32(0, 0); // zero the memory
+  getDiagnosticView().setUint32(4, 0); // zero the memory
 
   const stepResultPtr = nativeLib._instance.exports.malloc(DialogueContext.StepResult.byteSize);
   const getStepResultView = () => new DataView(nativeLib._instance.exports.memory.buffer, stepResultPtr);
