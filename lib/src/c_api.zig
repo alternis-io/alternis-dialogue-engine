@@ -38,27 +38,54 @@ pub fn setZigAlloc(in_alloc: std.mem.Allocator) void {
     alloc = in_alloc;
 }
 
-const _InitDlgReturnType = @TypeOf(Api.DialogueContext.initFromJson).ReturnType;
+const _InitDlgReturnType = @typeInfo(@TypeOf(Api.DialogueContext.initFromJson)).Fn.return_type.?;
 const _InitDlgErrorType = @typeInfo(_InitDlgReturnType).ErrorUnion.error_set;
 
 pub const DiagnosticErrors = enum(c_int) {
     NoError = 0,
 
-    OutOfMemory = 1,
+    // alloc
+    OutOfMemory,
 
-    MissingField = 2,
-    UnexpectedToken = 3,
+    // json
+    MissingField,
+    UnexpectedToken,
+    Overflow,
+    InvalidCharacter,
+    InvalidNumber,
+    InvalidEnumTag,
+    DuplicateField,
+    UnknownField,
+    LengthMismatch,
+    SyntaxError,
+    UnexpectedEndOfInput,
+    BufferUnderrun,
+    ValueTooLong,
 
-    AlternisUnknownVersion = 4,
-    AlternisBadNextNode = 5,
-    AlternisInvalidNode = 6,
-    AlternisDefaultSeedUnsupportedPlatform = 7,
+    // alternis
+    AlternisUnknownVersion,
+    AlternisBadNextNode,
+    AlternisInvalidNode,
+    AlternisDefaultSeedUnsupportedPlatform,
 
     pub fn fromZig(err: _InitDlgErrorType) @This() {
         return switch (err) {
             error.OutOfMemory => .OutOfMemory,
+
             error.MissingField => .MissingField,
             error.UnexpectedToken => .UnexpectedToken,
+            error.Overflow => .Overflow,
+            error.InvalidCharacter => .InvalidCharacter,
+            error.InvalidNumber => .InvalidNumber,
+            error.InvalidEnumTag => .InvalidEnumTag,
+            error.DuplicateField => .DuplicateField,
+            error.UnknownField => .UnknownField,
+            error.LengthMismatch => .LengthMismatch,
+            error.SyntaxError => .SyntaxError,
+            error.UnexpectedEndOfInput => .UnexpectedEndOfInput,
+            error.BufferUnderrun => .BufferUnderrun,
+            error.ValueTooLong => .ValueTooLong,
+
             error.AlternisUnknownVersion => .AlternisUnknownVersion,
             error.AlternisBadNextNode => .AlternisBadNextNode,
             error.AlternisInvalidNode => .AlternisInvalidNode,
@@ -104,7 +131,7 @@ pub export fn ade_dialogue_ctx_create_json(
     c_diagnostic: *Diagnostic,
 ) ?*Api.DialogueContext {
     c_diagnostic.error_code = .NoError;
-    var zig_diagnostic = Diagnostic{};
+    var zig_diagnostic = Api.DialogueContext.Diagnostic{};
 
     const ctx_result = Api.DialogueContext.initFromJson(
         json_ptr[0..json_len],
@@ -119,9 +146,10 @@ pub export fn ade_dialogue_ctx_create_json(
     errdefer ctx_result.deinit(alloc);
 
     const ctx_slot = alloc.create(Api.DialogueContext) catch |e| {
-        c_diagnostic.*.error_message = "failed to allocate, see error code";
+        c_diagnostic.*.error_message = Slice(u8).fromZig("failed to allocate, see error code");
         c_diagnostic.*.error_code = DiagnosticErrors.fromZig(e);
         c_diagnostic.*._needs_free = false;
+        return null;
     };
     ctx_slot.* = ctx_result;
 

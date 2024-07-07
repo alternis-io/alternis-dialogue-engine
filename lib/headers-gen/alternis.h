@@ -59,13 +59,31 @@ struct StepResult {
 };
 
 typedef enum DiagnosticErrors {
-    OutOfMemory = 1,
-    MissingField = 2,
-    UnexpectedToken = 3,
-    AlternisUnknownVersion = 4,
-    AlternisBadNextNode = 5,
-    AlternisInvalidNode = 6,
-    AlternisDefaultSeedUnsupportedPlatform = 7,
+    NoError = 0,
+
+    // alloc
+    OutOfMemory,
+
+    // json
+    MissingField,
+    UnexpectedToken,
+    Overflow,
+    InvalidCharacter,
+    InvalidNumber,
+    InvalidEnumTag,
+    DuplicateField,
+    UnknownField,
+    LengthMismatch,
+    SyntaxError,
+    UnexpectedEndOfInput,
+    BufferUnderrun,
+    ValueTooLong,
+
+    // alternis
+    AlternisUnknownVersion,
+    AlternisBadNextNode,
+    AlternisInvalidNode,
+    AlternisDefaultSeedUnsupportedPlatform
 } DiagnosticErrors;
 
 struct Diagnostic {
