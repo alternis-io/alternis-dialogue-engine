@@ -144,6 +144,27 @@ export namespace DialogueContext {
     // NOTE: union types list be synced manually
     export const byteSize = 4 + Math.max(Line.byteSize, Slice(Line).byteSize);
   }
+
+  export interface Diagnostic {
+    error_message: string;
+    free(): void;
+  }
+
+  // FIXME: generate this code
+  export namespace Diagnostic {
+    export function unmarshal(helper: WasmHelper<NativeModuleExports>, view: DataView): Diagnostic {
+      const error_message = StringSlice.unmarshal(helper, view);
+      return {
+        error_message: error_message!.value,
+        free() {
+          // FIXME: make synchronous
+          getNativeLib().then((lib) => lib._instance.exports.ade_diagnostic_destroy(view.byteOffset));
+        }
+      };
+    }
+
+    export const byteSize = StringSlice.byteSize + 4; // 4 is padded bool§
+  }
 }
 
 export interface DialogueContext {
@@ -172,7 +193,7 @@ interface NativeModuleExports {
     json_len: number,
     random_seed: bigint,
     no_interpolate: 0 | 1,
-    err: number
+    diagnostic: number,
   ): number;
 
   ade_dialogue_ctx_destroy(dialogue_ctx: number): void;
@@ -181,6 +202,8 @@ interface NativeModuleExports {
   ade_dialogue_ctx_reset(dialogue_ctx: number, dialogue_id: number, node_index: number): void;
   ade_dialogue_ctx_reply(dialogue_ctx: number, dialogue_id: number, reply_id: number): void;
   ade_dialogue_ctx_get_node_by_label(dialogue_ctx: number, dialogue_id: number, label_ptr: number, label_len: number): number;
+
+  ade_diagnostic_destroy(diagnostic: number): void;
 
   ade_dialogue_ctx_set_variable_boolean(
     in_dialogue_ctx: number,
@@ -206,7 +229,7 @@ interface NativeModuleExports {
 
 let _nativeModulePromise: Promise<WasmHelper<NativeModuleExports>> | undefined;
 
-import initWasm from "../node_modules/alternis-wasm/zig-out/lib/alternis.wasm?init";
+import initWasm from "../node_modules/alternis-wasm/zig-out/bin/alternis.wasm?init";
 
 let importsInstance!: WebAssembly.Instance;
 
@@ -253,20 +276,23 @@ export async function makeDialogueContext(json: string, opts: MakeDialogueContex
   const randomSeed = opts.randomSeed ?? BigInt(Math.floor(Math.random() * Number.MAX_SAFE_INTEGER));
   const noInterpolate = (opts.noInterpolate ?? false) ? 1 : 0;
 
-  const errSlot = nativeLib._instance.exports.malloc(4); // wasm32 ptr bytesize
+  const diagnosticSlot = nativeLib._instance.exports.malloc(DialogueContext.Diagnostic.byteSize);
   // use a function to defer DataView creation since growth can invalidate the view
-  const getErrView = () => new DataView(nativeLib._instance.exports.memory.buffer, errSlot);
-  getErrView().setUint32(0, 0, true); // zero the memory
+  const getDiagnosticView = () => new DataView(nativeLib._instance.exports.memory.buffer, diagnosticSlot);
+  if (DialogueContext.Diagnostic.byteSize != 8) throw Error("incorrect byte size assumption");
+  getDiagnosticView().setUint32(0, 0); // zero the memory
+  getDiagnosticView().setUint32(4, 0); // zero the memory
 
   const stepResultPtr = nativeLib._instance.exports.malloc(DialogueContext.StepResult.byteSize);
   const getStepResultView = () => new DataView(nativeLib._instance.exports.memory.buffer, stepResultPtr);
 
-  const nativeDlgCtx = nativeLib._instance.exports.ade_dialogue_ctx_create_json(wasmJsonStr.ptr, wasmJsonStr.len, randomSeed, noInterpolate, errSlot);
-  const errPtr = getErrView().getUint32(0, true);
+  const nativeDlgCtx = nativeLib._instance.exports.ade_dialogue_ctx_create_json(wasmJsonStr.ptr, wasmJsonStr.len, randomSeed, noInterpolate, diagnosticSlot);
 
   if (errPtr !== 0) {
-    const err = nativeLib.ptrToStr(errPtr);
-    throw Error(err.value);
+    const err = DialogueContext.Diagnostic.unmarshal(nativeLib, getDiagnosticView());
+    const errorMessage = err.error_message;
+    err.free();
+    throw Error(errorMessage);
   }
 
   /** table of js strings already stored in wasm */

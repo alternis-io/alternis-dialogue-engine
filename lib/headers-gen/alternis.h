@@ -58,12 +58,48 @@ struct StepResult {
     };
 };
 
+typedef enum DiagnosticErrors {
+    NoError = 0,
+
+    // alloc
+    OutOfMemory,
+
+    // json
+    MissingField,
+    UnexpectedToken,
+    Overflow,
+    InvalidCharacter,
+    InvalidNumber,
+    InvalidEnumTag,
+    DuplicateField,
+    UnknownField,
+    LengthMismatch,
+    SyntaxError,
+    UnexpectedEndOfInput,
+    BufferUnderrun,
+    ValueTooLong,
+
+    // alternis
+    AlternisUnknownVersion,
+    AlternisBadNextNode,
+    AlternisInvalidNode,
+    AlternisDefaultSeedUnsupportedPlatform
+} DiagnosticErrors;
+
+struct Diagnostic {
+    zigbool _needs_free;
+    int error_code;
+    StringSlice error_message;
+};
+
+void ade_diagnostic_destroy(Diagnostic* self);
+
 DialogueContext* ade_dialogue_ctx_create_json(
     const char* json_ptr,
     size_t json_len,
     uint64_t randomSeed,
     zigbool no_interpolate,
-    const char** err
+    Diagnostic* const c_diagnostic
 );
 
 void ade_dialogue_ctx_destroy(DialogueContext* ctx);

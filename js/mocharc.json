@@ -1,4 +1,4 @@
 {
-  "loader": "ts-node/esm",
+  "import": "tsx/esm",
   "timeout": 20000
 }

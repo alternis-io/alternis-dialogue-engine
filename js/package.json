@@ -51,6 +51,7 @@
     "mocha": "^10.2.0",
     "source-map-support": "^0.5.21",
     "ts-node": "^10.9.1",
+    "tsx": "^4.16.2",
     "typescript": "^5.2.2",
     "vite": "^4.4.11",
     "vite-plugin-dts": "^3.6.0"

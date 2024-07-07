@@ -54,8 +54,7 @@ pub fn OptSlice(comptime T: type) type {
         len: usize = 0,
 
         pub fn fromZig(slice: ?[]const T) @This() {
-            return if (slice) |s| @This(){ .ptr = s.ptr, .len = s.len }
-                else @This(){ .ptr = null, .len = 0 };
+            return if (slice) |s| @This(){ .ptr = s.ptr, .len = s.len } else @This(){ .ptr = null, .len = 0 };
         }
 
         pub fn toZig(self: @This()) ?[]const T {

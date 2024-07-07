@@ -4,10 +4,7 @@ const Api = @import("./main.zig");
 const c_api = @import("./c_api.zig");
 
 export fn malloc(len: usize) [*]u8 {
-    return (
-        std.heap.wasm_allocator.alloc(u8, len)
-            catch |e| return std.debug.panic("alloc error: {}", .{e})
-    ).ptr;
+    return (std.heap.wasm_allocator.alloc(u8, len) catch |e| return std.debug.panic("alloc error: {}", .{e})).ptr;
 }
 
 export fn free(ptr: [*]u8, len: usize) void {
