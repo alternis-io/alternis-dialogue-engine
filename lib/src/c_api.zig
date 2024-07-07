@@ -68,7 +68,7 @@ pub const DiagnosticErrors = enum(c_int) {
     AlternisInvalidNode,
     AlternisDefaultSeedUnsupportedPlatform,
 
-    pub fn fromZig(err: _InitDlgErrorType) @This() {
+    pub fn fromZig(err: Api.DialogueContext.InitFromJsonError) @This() {
         return switch (err) {
             error.OutOfMemory => .OutOfMemory,
 
@@ -123,6 +123,7 @@ pub const Diagnostic = extern struct {
 };
 
 /// when returning null, the diagnostic will be set with an error code
+/// See DialogueContext.initFromJson for more documentation
 pub export fn ade_dialogue_ctx_create_json(
     json_ptr: [*]const u8,
     json_len: usize,
@@ -249,7 +250,8 @@ export fn ade_dialogue_ctx_step(dialogue_ctx: *Api.DialogueContext, dialogue_id:
 // for now this just invokes failing allocator and panics...
 test "create context without allocator set fails" {
     const dialogue = "{}";
-    try t.expectEqual(@as(?*Api.DialogueContext, null), ade_dialogue_ctx_create_json(dialogue.ptr, dialogue.len));
+    var diagnostic = Diagnostic{};
+    try t.expectEqual(@as(?*Api.DialogueContext, null), ade_dialogue_ctx_create_json(dialogue.ptr, dialogue.len, 0, false, &diagnostic));
 }
 
 // FIXME: source json from same file as main.zig tests
@@ -259,12 +261,12 @@ test "run small dialogue under c api" {
     const src = try FileBuffer.fromDirAndPath(t.allocator, std.fs.cwd(), "./test/assets/simple1.alternis.json");
     defer src.free(t.allocator);
 
-    var err: ?[*:0]const u8 = null;
-    var ctx = ade_dialogue_ctx_create_json(src.buffer.ptr, src.buffer.len, 0, false, &err);
-    if (err) |err_str| {
-        std.debug.print("err: {s}", .{err_str});
+    var diagnostic = Diagnostic{};
+    var ctx = ade_dialogue_ctx_create_json(src.buffer.ptr, src.buffer.len, 0, false, &diagnostic);
+    if (ctx == null) {
+        std.debug.print("err code {}: '{s}'", .{ diagnostic.error_code, diagnostic.error_message.toZig() });
     }
-    try t.expectEqual(err, null);
+    try t.expectEqual(diagnostic.error_code, .NoError);
     try t.expect(ctx != null);
     defer ade_dialogue_ctx_destroy(ctx.?);
 

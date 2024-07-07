@@ -272,12 +272,21 @@ pub const DialogueContext = struct {
         }
     };
 
+    pub const AlternisError = error{
+        AlternisUnknownVersion,
+        AlternisBadNextNode,
+        AlternisInvalidNode,
+        AlternisDefaultSeedUnsupportedPlatform,
+    };
+
+    pub const InitFromJsonError = AlternisError || json.ParseError(json.Scanner) || std.mem.Allocator.Error;
+
     pub fn initFromJson(
         json_text: []const u8,
         alloc: std.mem.Allocator,
         opts: InitOpts,
         diagnostic: *Diagnostic,
-    ) !DialogueContext {
+    ) InitFromJsonError!DialogueContext {
         diagnostic.* = Diagnostic.new("No context. See error code");
 
         // FIXME: use a separate arena for json parsing, deinit it that one,
@@ -748,17 +757,14 @@ test "run small dialogue under zig api" {
     const src = try FileBuffer.fromDirAndPath(t.allocator, std.fs.cwd(), "./test/assets/simple1.alternis.json");
     defer src.free(t.allocator);
 
-    var ctx_result = DialogueContext.initFromJson(src.buffer, t.allocator, .{});
+    var diagnostic = DialogueContext.Diagnostic{};
+    errdefer diagnostic.free(t.allocator);
 
-    defer if (ctx_result.is_ok()) ctx_result.value.deinit(t.allocator)
-    // FIXME: need to add freeing logic to Result
-    else t.allocator.free(@constCast(ctx_result.err.?));
+    var ctx = try DialogueContext.initFromJson(src.buffer, t.allocator, .{}, &diagnostic);
+    defer ctx.deinit(t.allocator);
 
-    if (ctx_result.is_err())
-        std.debug.print("\nerr: '{s}'", .{ctx_result.err.?});
-    try t.expect(ctx_result.is_ok());
+    errdefer |e| std.debug.print("\nerr {}: '{s}'", .{ e, diagnostic.error_message.toZig() });
 
-    var ctx = ctx_result.value;
     try t.expectEqual(@as(?usz, 0), ctx.getCurrentNodeIndex(0));
 
     {
@@ -789,17 +795,14 @@ test "run large dialogue under zig api" {
     const src = try FileBuffer.fromDirAndPath(t.allocator, std.fs.cwd(), "./test/assets/sample1.alternis.json");
     defer src.free(t.allocator);
 
-    var ctx_result = DialogueContext.initFromJson(src.buffer, t.allocator, .{ .random_seed = 0 });
+    var diagnostic = DialogueContext.Diagnostic{};
+    errdefer diagnostic.free(t.allocator);
 
-    defer if (ctx_result.is_ok()) ctx_result.value.deinit(t.allocator)
-    // FIXME: need to add freeing logic to Result
-    else t.allocator.free(@constCast(ctx_result.err.?));
+    var ctx = try DialogueContext.initFromJson(src.buffer, t.allocator, .{ .random_seed = 0 }, &diagnostic);
+    defer ctx.deinit(t.allocator);
 
-    if (ctx_result.is_err())
-        std.debug.print("\nerr: '{s}'", .{ctx_result.err.?});
-    try t.expect(ctx_result.is_ok());
+    errdefer |e| std.debug.print("\nerr {}: '{s}'", .{ e, diagnostic.error_message.toZig() });
 
-    var ctx = ctx_result.value;
     try t.expectEqual(@as(?usz, 0), ctx.getCurrentNodeIndex(0));
 
     const SetNameCallback = struct {
