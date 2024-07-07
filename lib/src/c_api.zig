@@ -16,19 +16,22 @@ const FileBuffer = @import("./FileBuffer.zig");
 const ConfigurableSimpleAlloc = @import("./simple_alloc.zig").ConfigurableSimpleAlloc;
 var configured_raw_alloc: ?ConfigurableSimpleAlloc = null;
 
+const is_wasm = builtin.os.tag == .freestanding and builtin.target.cpu.arch == .wasm32;
 var alloc: std.mem.Allocator =
-    if (builtin.os.tag == .freestanding and builtin.target.cpu.arch == .wasm32)
-    std.heap.wasm_allocator
-    // note this is intended to be overridden by a call to ade_set_alloc
-    // FIXME: a null allocator state which yields a custom error is in order
-else
-    std.testing.failing_allocator;
+    if (is_wasm) std.heap.wasm_allocator else std.testing.failing_allocator;
+
+/// internal state whether allocator was set to handle rejection. Not using
+/// a null variable even if it's better because for now I'm assuming
+/// people will never call any other API functions until they get a valid
+/// DialogueContext from ade_dialogue_ctx_create_json
+var is_allocator_set = is_wasm;
 
 // FIXME: read https://nullprogram.com/blog/2023/12/17/
 export fn ade_set_alloc(
     in_malloc: *const fn (usize) callconv(.C) ?*anyopaque,
     in_free: *const fn (?*anyopaque) callconv(.C) void,
 ) void {
+    is_allocator_set = true;
     configured_raw_alloc = ConfigurableSimpleAlloc.init(in_malloc, in_free);
     alloc = configured_raw_alloc.?.allocator();
 }
@@ -67,6 +70,7 @@ pub const DiagnosticErrors = enum(c_int) {
     AlternisBadNextNode,
     AlternisInvalidNode,
     AlternisDefaultSeedUnsupportedPlatform,
+    AlternisAllocatorUnset,
 
     pub fn fromZig(err: Api.DialogueContext.InitFromJsonError) @This() {
         return switch (err) {
@@ -90,6 +94,7 @@ pub const DiagnosticErrors = enum(c_int) {
             error.AlternisBadNextNode => .AlternisBadNextNode,
             error.AlternisInvalidNode => .AlternisInvalidNode,
             error.AlternisDefaultSeedUnsupportedPlatform => .AlternisDefaultSeedUnsupportedPlatform,
+            error.AlternisAllocatorUnset => .AlternisAllocatorUnset,
         };
     }
 };
@@ -133,6 +138,13 @@ pub export fn ade_dialogue_ctx_create_json(
 ) ?*Api.DialogueContext {
     c_diagnostic.error_code = .NoError;
     var zig_diagnostic = Api.DialogueContext.Diagnostic{};
+    
+    if (!is_allocator_set) {
+        c_diagnostic.*.error_message = Slice(u8).fromZig("allocator was unset, call ade_set_alloc first");
+        c_diagnostic.*.error_code = DiagnosticErrors.fromZig(error.AlternisAllocatorUnset);
+        c_diagnostic.*._needs_free = false;
+        return null; 
+    }
 
     const ctx_result = Api.DialogueContext.initFromJson(
         json_ptr[0..json_len],
