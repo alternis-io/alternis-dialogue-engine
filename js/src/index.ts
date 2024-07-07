@@ -146,24 +146,59 @@ export namespace DialogueContext {
   }
 
   export interface Diagnostic {
-    error_message: string;
+    errorMessage: string;
+    errorCode: Diagnostic.Errors;
     free(): void;
   }
 
   // FIXME: generate this code
   export namespace Diagnostic {
+    export enum Errors {
+      NoError = 0,
+
+      // alloc
+      OutOfMemory,
+
+      // json
+      MissingField,
+      UnexpectedToken,
+      Overflow,
+      InvalidCharacter,
+      InvalidNumber,
+      InvalidEnumTag,
+      DuplicateField,
+      UnknownField,
+      LengthMismatch,
+      SyntaxError,
+      UnexpectedEndOfInput,
+      BufferUnderrun,
+      ValueTooLong,
+
+      // alternis
+      AlternisUnknownVersion,
+      AlternisBadNextNode,
+      AlternisInvalidNode,
+      AlternisDefaultSeedUnsupportedPlatform
+    }
+
     export function unmarshal(helper: WasmHelper<NativeModuleExports>, view: DataView): Diagnostic {
-      const error_message = StringSlice.unmarshal(helper, view);
+      const stringSliceView = new DataView(view.buffer, view.byteOffset + 8, StringSlice.byteSize);
+      const errorCode = view.getInt32(4);
+      const errorMessage = errorCode === Diagnostic.Errors.NoError
+        ? { value: "" }
+        : StringSlice.unmarshal(helper, stringSliceView);
       return {
-        error_message: error_message!.value,
+        errorCode,
+        errorMessage: errorMessage!.value,
         free() {
           // FIXME: make synchronous
           getNativeLib().then((lib) => lib._instance.exports.ade_diagnostic_destroy(view.byteOffset));
-        }
+        },
       };
     }
 
-    export const byteSize = StringSlice.byteSize + 4; // 4 is padded bool§
+    // 4 byte boolean with padding, aligned c_int, string slice
+    export const byteSize = 4 + 4 + StringSlice.byteSize;
   }
 }
 
@@ -230,6 +265,7 @@ interface NativeModuleExports {
 let _nativeModulePromise: Promise<WasmHelper<NativeModuleExports>> | undefined;
 
 import initWasm from "../node_modules/alternis-wasm/zig-out/bin/alternis.wasm?init";
+import { DiffieHellmanGroup } from "crypto";
 
 let importsInstance!: WebAssembly.Instance;
 
@@ -266,6 +302,11 @@ declare global {
   };
 }
 
+function zero(view: DataView): void {
+  for (let i = 0; i < view.byteLength; i += 4)
+    view.setUint32(i, 0)
+}
+
 /**
  * @param {string} json - a valid json string in the AlternisDialogueV1 format
  */
@@ -278,21 +319,24 @@ export async function makeDialogueContext(json: string, opts: MakeDialogueContex
 
   const diagnosticSlot = nativeLib._instance.exports.malloc(DialogueContext.Diagnostic.byteSize);
   // use a function to defer DataView creation since growth can invalidate the view
-  const getDiagnosticView = () => new DataView(nativeLib._instance.exports.memory.buffer, diagnosticSlot);
-  if (DialogueContext.Diagnostic.byteSize != 8) throw Error("incorrect byte size assumption");
-  getDiagnosticView().setUint32(0, 0); // zero the memory
-  getDiagnosticView().setUint32(4, 0); // zero the memory
+  const getDiagnosticView = () => new DataView(nativeLib._instance.exports.memory.buffer, diagnosticSlot, DialogueContext.Diagnostic.byteSize);
+  zero(getDiagnosticView());
 
   const stepResultPtr = nativeLib._instance.exports.malloc(DialogueContext.StepResult.byteSize);
   const getStepResultView = () => new DataView(nativeLib._instance.exports.memory.buffer, stepResultPtr);
 
   const nativeDlgCtx = nativeLib._instance.exports.ade_dialogue_ctx_create_json(wasmJsonStr.ptr, wasmJsonStr.len, randomSeed, noInterpolate, diagnosticSlot);
+  
+  const diagnostic = DialogueContext.Diagnostic.unmarshal(nativeLib, getDiagnosticView());
 
-  if (errPtr !== 0) {
-    const err = DialogueContext.Diagnostic.unmarshal(nativeLib, getDiagnosticView());
-    const errorMessage = err.error_message;
-    err.free();
-    throw Error(errorMessage);
+  try {
+    if (diagnostic.errorCode !== DialogueContext.Diagnostic.Errors.NoError) {
+      const err = DialogueContext.Diagnostic.unmarshal(nativeLib, getDiagnosticView());
+      const errorMessage = err.errorMessage;
+      throw new Error(errorMessage);
+    }
+  } finally {
+    diagnostic.free();
   }
 
   /** table of js strings already stored in wasm */
