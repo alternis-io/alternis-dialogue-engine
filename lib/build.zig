@@ -18,9 +18,9 @@ pub fn build(b: *std.Build) void {
     b.installArtifact(native_lib);
 
     // bug: https://github.com/ziglang/zig/issues/18497
-    _ = native_lib.getEmittedH();
-    const install_shared_header = b.addInstallHeaderFile(b.path(".zig-cache/alternis.h"), "alternis.h");
-    b.getInstallStep().dependOn(&install_shared_header.step);
+    //_ = native_lib.getEmittedH();
+    //const install_shared_header = b.addInstallHeaderFile(b.path(".zig-cache/alternis.h"), "alternis.h");
+    //b.getInstallStep().dependOn(&install_shared_header.step);
 
     const shared_lib = b.addSharedLibrary(.{
         .name = "alternis",

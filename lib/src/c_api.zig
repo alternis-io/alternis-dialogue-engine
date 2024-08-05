@@ -44,6 +44,12 @@ pub fn setZigAlloc(in_alloc: std.mem.Allocator) void {
 const _InitDlgReturnType = @typeInfo(@TypeOf(Api.DialogueContext.initFromJson)).Fn.return_type.?;
 const _InitDlgErrorType = @typeInfo(_InitDlgReturnType).ErrorUnion.error_set;
 
+pub const CApiUniqueErrors = error{
+    AlternisAllocatorUnset,
+};
+
+pub const CApiDiagnosticErrors = Api.DialogueContext.InitFromJsonError || CApiUniqueErrors;
+
 pub const DiagnosticErrors = enum(c_int) {
     NoError = 0,
 
@@ -70,31 +76,13 @@ pub const DiagnosticErrors = enum(c_int) {
     AlternisBadNextNode,
     AlternisInvalidNode,
     AlternisDefaultSeedUnsupportedPlatform,
+
+    // CApiUniqueErrors
     AlternisAllocatorUnset,
 
-    pub fn fromZig(err: Api.DialogueContext.InitFromJsonError) @This() {
+    pub fn fromZig(err: CApiDiagnosticErrors) @This() {
         return switch (err) {
-            error.OutOfMemory => .OutOfMemory,
-
-            error.MissingField => .MissingField,
-            error.UnexpectedToken => .UnexpectedToken,
-            error.Overflow => .Overflow,
-            error.InvalidCharacter => .InvalidCharacter,
-            error.InvalidNumber => .InvalidNumber,
-            error.InvalidEnumTag => .InvalidEnumTag,
-            error.DuplicateField => .DuplicateField,
-            error.UnknownField => .UnknownField,
-            error.LengthMismatch => .LengthMismatch,
-            error.SyntaxError => .SyntaxError,
-            error.UnexpectedEndOfInput => .UnexpectedEndOfInput,
-            error.BufferUnderrun => .BufferUnderrun,
-            error.ValueTooLong => .ValueTooLong,
-
-            error.AlternisUnknownVersion => .AlternisUnknownVersion,
-            error.AlternisBadNextNode => .AlternisBadNextNode,
-            error.AlternisInvalidNode => .AlternisInvalidNode,
-            error.AlternisDefaultSeedUnsupportedPlatform => .AlternisDefaultSeedUnsupportedPlatform,
-            error.AlternisAllocatorUnset => .AlternisAllocatorUnset,
+            inline else => |e| @field(DiagnosticErrors, @errorName(e)),
         };
     }
 };
@@ -138,12 +126,12 @@ pub export fn ade_dialogue_ctx_create_json(
 ) ?*Api.DialogueContext {
     c_diagnostic.error_code = .NoError;
     var zig_diagnostic = Api.DialogueContext.Diagnostic{};
-    
+
     if (!is_allocator_set) {
         c_diagnostic.*.error_message = Slice(u8).fromZig("allocator was unset, call ade_set_alloc first");
         c_diagnostic.*.error_code = DiagnosticErrors.fromZig(error.AlternisAllocatorUnset);
         c_diagnostic.*._needs_free = false;
-        return null; 
+        return null;
     }
 
     const ctx_result = Api.DialogueContext.initFromJson(
