@@ -38,6 +38,7 @@ export fn ade_set_alloc(
 
 /// set the allocator directly, useful when using the c_api and zig code (e.g. tests)
 pub fn setZigAlloc(in_alloc: std.mem.Allocator) void {
+    is_allocator_set = true;
     alloc = in_alloc;
 }
 
